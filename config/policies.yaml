@@ -1,0 +1,78 @@
+policies:
+  - id: block_mass_delete
+    description: Block file delete operations when the requested delete count is high.
+    priority: 100
+    effect: block
+    risk_score: 95
+    reason: Mass delete operations are blocked by policy.
+    conditions:
+      tool_name:
+        equals: file_store
+      action:
+        equals: delete
+      parameters:
+        - path: count
+          greater_than: 5
+
+  - id: block_external_data_transfer
+    description: Block transfers to external destinations.
+    priority: 90
+    effect: block
+    risk_score: 90
+    reason: External data transfer is blocked by policy.
+    conditions:
+      action:
+        equals: transfer
+      parameters:
+        - path: destination_type
+          equals: external
+
+  - id: suspicious_crm_finance_delete_sequence
+    description: Flag the sequence of CRM read, financial export, then file deletion.
+    priority: 80
+    effect: block
+    risk_score: 92
+    reason: Suspicious CRM to finance export to delete sequence detected.
+    conditions:
+      sequence:
+        - tool_name:
+            equals: crm
+          action:
+            equals: read
+        - tool_name:
+            equals: finance
+          action:
+            equals: export
+        - tool_name:
+            equals: file_store
+          action:
+            equals: delete
+
+  - id: require_approval_financial_export
+    description: Require human approval for cross-border financial exports.
+    priority: 70
+    effect: require_approval
+    risk_score: 75
+    reason: Cross-border financial exports require human approval.
+    conditions:
+      tool_name:
+        equals: finance
+      action:
+        equals: export
+      parameters:
+        - path: report_type
+          equals: financial
+        - path: cross_border
+          equals: true
+
+  - id: allow_read_only_crm_lookup
+    description: Allow read-only CRM customer lookup.
+    priority: 10
+    effect: allow
+    risk_score: 10
+    reason: Read-only CRM customer lookup is allowed.
+    conditions:
+      tool_name:
+        equals: crm
+      action:
+        equals: read
