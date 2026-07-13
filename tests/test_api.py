@@ -95,6 +95,32 @@ def test_tool_call_financial_export_creates_approval(client: TestClient) -> None
     assert approvals[0]["status"] == "pending"
 
 
+def test_audit_logs_include_every_tool_call_decision(client: TestClient) -> None:
+    first = client.post(
+        "/v1/tool-call",
+        json=payload(tool_name="crm", action="read"),
+    ).json()
+    second = client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="file_store",
+            action="delete",
+            parameters={"count": 10},
+        ),
+    ).json()
+
+    response = client.get("/v1/audit-logs")
+
+    assert response.status_code == 200
+    logs = response.json()
+    assert [entry["trace_id"] for entry in logs] == [
+        second["trace_id"],
+        first["trace_id"],
+    ]
+    assert logs[0]["decision"] == "block"
+    assert logs[1]["decision"] == "allow"
+
+
 def test_approval_flow_approve_and_reject(client: TestClient) -> None:
     client.post(
         "/v1/tool-call",
@@ -148,3 +174,10 @@ def test_api_detects_suspicious_sequence(client: TestClient) -> None:
     body = response.json()
     assert body["decision"] == "block"
     assert body["matched_policy_id"] == "suspicious_crm_finance_delete_sequence"
+
+
+def test_dashboard_route_serves_html(client: TestClient) -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "ActGuard Control Plane" in response.text

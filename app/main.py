@@ -6,11 +6,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.approvals import ApprovalRepository
 from app.audit_log import AuditLogRepository
 from app.database import get_database_path, initialize_database
 from app.models import (
+    AuditLogEntry,
     ApprovalDecisionResponse,
     ApprovalItem,
     Decision,
@@ -21,6 +24,7 @@ from app.policy_engine import PolicyEngine
 from app.sequence_detector import SequenceDetector, ToolCallEvent
 
 POLICY_PATH = Path("config/policies.yaml")
+DASHBOARD_PATH = Path("static/index.html")
 
 sequence_detector = SequenceDetector()
 policy_engine = PolicyEngine.from_yaml(POLICY_PATH)
@@ -38,6 +42,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 def get_db_path() -> Path:
@@ -50,6 +55,11 @@ def get_policy_engine() -> PolicyEngine:
 
 def get_sequence_detector() -> SequenceDetector:
     return sequence_detector
+
+
+@app.get("/", include_in_schema=False)
+def dashboard() -> FileResponse:
+    return FileResponse(DASHBOARD_PATH)
 
 
 @app.post("/v1/tool-call", response_model=ToolCallDecision)
@@ -90,6 +100,11 @@ def evaluate_tool_call(
 @app.get("/v1/approvals", response_model=list[ApprovalItem])
 def list_approvals(db_path: Path = Depends(get_db_path)) -> list[ApprovalItem]:
     return ApprovalRepository(db_path).list_pending()
+
+
+@app.get("/v1/audit-logs", response_model=list[AuditLogEntry])
+def list_audit_logs(db_path: Path = Depends(get_db_path)) -> list[AuditLogEntry]:
+    return AuditLogRepository(db_path).list_entries()
 
 
 @app.post(

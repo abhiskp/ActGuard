@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ActGuard Control Plane</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #18212f;
+        --muted: #667085;
+        --line: #d8dee8;
+        --panel: #ffffff;
+        --page: #f6f8fb;
+        --teal: #0f766e;
+        --teal-soft: #e6f5f2;
+        --rose: #be123c;
+        --rose-soft: #fff1f2;
+        --amber: #b45309;
+        --amber-soft: #fff7ed;
+        --indigo: #4338ca;
+        --indigo-soft: #eef2ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        align-items: center;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-flex;
+        font-weight: 700;
+        gap: 8px;
+        min-height: 38px;
+        padding: 8px 12px;
+        transition:
+          background 140ms ease,
+          border-color 140ms ease,
+          color 140ms ease,
+          transform 140ms ease;
+        white-space: nowrap;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+        transform: none;
+      }
+
+      .shell {
+        margin: 0 auto;
+        max-width: 1440px;
+        padding: 22px;
+      }
+
+      .topbar {
+        align-items: center;
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      .brand {
+        align-items: center;
+        display: flex;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .brand-mark {
+        align-items: center;
+        background: var(--ink);
+        border-radius: 8px;
+        color: white;
+        display: inline-flex;
+        height: 40px;
+        justify-content: center;
+        width: 40px;
+      }
+
+      .brand h1 {
+        font-size: 22px;
+        line-height: 1.1;
+        margin: 0;
+      }
+
+      .brand p {
+        color: var(--muted);
+        font-size: 13px;
+        margin: 3px 0 0;
+      }
+
+      .top-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: flex-end;
+      }
+
+      .btn-primary {
+        background: var(--ink);
+        color: white;
+      }
+
+      .btn-secondary {
+        background: white;
+        border-color: var(--line);
+        color: var(--ink);
+      }
+
+      .btn-approve {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .btn-reject {
+        background: var(--rose-soft);
+        color: var(--rose);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: minmax(340px, 0.9fr) minmax(420px, 1.3fr);
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 10px 28px rgba(24, 33, 47, 0.06);
+      }
+
+      .panel-header {
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        padding: 14px 16px;
+      }
+
+      .panel-title {
+        align-items: center;
+        display: flex;
+        gap: 9px;
+        min-width: 0;
+      }
+
+      .panel-title h2 {
+        font-size: 15px;
+        margin: 0;
+      }
+
+      .panel-title span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .panel-body {
+        padding: 16px;
+      }
+
+      .summary {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-bottom: 16px;
+      }
+
+      .metric {
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        min-height: 86px;
+        padding: 13px;
+      }
+
+      .metric span {
+        color: var(--muted);
+        display: block;
+        font-size: 12px;
+        margin-bottom: 9px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 27px;
+        line-height: 1;
+      }
+
+      .metric.allow strong {
+        color: var(--teal);
+      }
+
+      .metric.approval strong {
+        color: var(--amber);
+      }
+
+      .metric.block strong {
+        color: var(--rose);
+      }
+
+      .metric.pending strong {
+        color: var(--indigo);
+      }
+
+      .form-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .field-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      label {
+        color: var(--muted);
+        display: grid;
+        font-size: 12px;
+        font-weight: 700;
+        gap: 6px;
+      }
+
+      input,
+      select,
+      textarea {
+        background: #fbfcfe;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--ink);
+        min-height: 40px;
+        padding: 9px 10px;
+        width: 100%;
+      }
+
+      textarea {
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        min-height: 132px;
+        resize: vertical;
+      }
+
+      .template-row {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .template-row button {
+        background: white;
+        border-color: var(--line);
+        justify-content: center;
+        min-width: 0;
+      }
+
+      .result-box {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 8px;
+        margin-top: 14px;
+        min-height: 104px;
+        padding: 12px;
+      }
+
+      .result-empty {
+        align-items: center;
+        color: var(--muted);
+        display: flex;
+        min-height: 76px;
+      }
+
+      .decision-row {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: space-between;
+      }
+
+      .pill {
+        align-items: center;
+        border-radius: 999px;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 800;
+        gap: 6px;
+        min-height: 26px;
+        padding: 4px 9px;
+        text-transform: uppercase;
+      }
+
+      .pill.allow {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .pill.require_approval,
+      .pill.pending {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .pill.block,
+      .pill.rejected {
+        background: var(--rose-soft);
+        color: var(--rose);
+      }
+
+      .pill.approved {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .approval-list {
+        display: grid;
+        gap: 10px;
+        max-height: 369px;
+        overflow: auto;
+      }
+
+      .approval-item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .approval-item header {
+        align-items: start;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+      }
+
+      .approval-item h3 {
+        font-size: 14px;
+        margin: 0 0 4px;
+      }
+
+      .approval-item p,
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+        margin: 0;
+      }
+
+      .approval-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .table-wrap {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        max-height: 430px;
+        overflow: auto;
+      }
+
+      table {
+        border-collapse: collapse;
+        font-size: 13px;
+        min-width: 900px;
+        width: 100%;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f9fafc;
+        color: var(--muted);
+        font-size: 11px;
+        position: sticky;
+        text-transform: uppercase;
+        top: 0;
+        z-index: 1;
+      }
+
+      td code {
+        color: var(--indigo);
+        font-size: 12px;
+      }
+
+      .audit-panel {
+        grid-column: 1 / -1;
+      }
+
+      .toolbar {
+        align-items: center;
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+      }
+
+      .error {
+        background: var(--rose-soft);
+        border: 1px solid #fecdd3;
+        border-radius: 8px;
+        color: var(--rose);
+        font-size: 13px;
+        margin-bottom: 12px;
+        padding: 10px 12px;
+      }
+
+      .empty-state {
+        align-items: center;
+        color: var(--muted);
+        display: flex;
+        min-height: 120px;
+        padding: 18px;
+      }
+
+      @media (max-width: 980px) {
+        .grid,
+        .summary,
+        .field-grid,
+        .template-row {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .top-actions {
+          justify-content: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useEffect, useMemo, useState } = React;
+
+      const templates = {
+        crm: {
+          label: "CRM Read",
+          icon: "search",
+          tool_name: "crm",
+          action: "read",
+          resource: "customers/acme-corp",
+          parameters: {
+            customer_id: "acme-corp",
+            fields: ["name", "tier", "region"]
+          }
+        },
+        finance: {
+          label: "Finance Export",
+          icon: "file-warning",
+          tool_name: "finance",
+          action: "export",
+          resource: "reports/q2-cross-border",
+          parameters: {
+            report_type: "financial",
+            cross_border: true
+          }
+        },
+        delete: {
+          label: "Mass Delete",
+          icon: "trash-2",
+          tool_name: "file_store",
+          action: "delete",
+          resource: "drive/folder/customer-exports",
+          parameters: {
+            count: 10,
+            path: "/mock/customer-exports"
+          }
+        }
+      };
+
+      function Icon({ name, size = 16 }) {
+        return <i data-lucide={name} style={{ width: size, height: size }} />;
+      }
+
+      function DecisionPill({ value }) {
+        return (
+          <span className={`pill ${value || "pending"}`}>
+            <Icon name={value === "block" ? "octagon-x" : value === "allow" ? "check" : "clock"} size={14} />
+            {value || "pending"}
+          </span>
+        );
+      }
+
+      function formatTime(value) {
+        if (!value) return "";
+        return new Intl.DateTimeFormat(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+          month: "short",
+          day: "2-digit"
+        }).format(new Date(value));
+      }
+
+      function parseRaw(raw) {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return {};
+        }
+      }
+
+      function App() {
+        const [auditLogs, setAuditLogs] = useState([]);
+        const [approvals, setApprovals] = useState([]);
+        const [selectedTemplate, setSelectedTemplate] = useState("crm");
+        const [form, setForm] = useState(() => toForm(templates.crm));
+        const [result, setResult] = useState(null);
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState("");
+
+        const stats = useMemo(() => {
+          return auditLogs.reduce(
+            (counts, item) => {
+              counts[item.decision] = (counts[item.decision] || 0) + 1;
+              return counts;
+            },
+            { allow: 0, require_approval: 0, block: 0 }
+          );
+        }, [auditLogs]);
+
+        useEffect(() => {
+          refresh();
+        }, []);
+
+        useEffect(() => {
+          if (window.lucide) {
+            window.lucide.createIcons();
+          }
+        });
+
+        function toForm(template) {
+          return {
+            agent_id: "dashboard-agent",
+            session_id: "dashboard-session",
+            tool_name: template.tool_name,
+            action: template.action,
+            resource: template.resource,
+            parametersText: JSON.stringify(template.parameters, null, 2)
+          };
+        }
+
+        async function request(path, options = {}) {
+          const response = await fetch(path, {
+            headers: { "Content-Type": "application/json" },
+            ...options
+          });
+          if (!response.ok) {
+            const body = await response.text();
+            throw new Error(body || `Request failed with ${response.status}`);
+          }
+          return response.json();
+        }
+
+        async function refresh() {
+          setError("");
+          try {
+            const [logs, queue] = await Promise.all([
+              request("/v1/audit-logs"),
+              request("/v1/approvals")
+            ]);
+            setAuditLogs(logs);
+            setApprovals(queue);
+          } catch (err) {
+            setError(err.message);
+          }
+        }
+
+        function applyTemplate(key) {
+          setSelectedTemplate(key);
+          setForm(toForm(templates[key]));
+          setResult(null);
+        }
+
+        async function submitToolCall(event) {
+          event.preventDefault();
+          setLoading(true);
+          setError("");
+          try {
+            const payload = {
+              agent_id: form.agent_id,
+              session_id: form.session_id,
+              tool_name: form.tool_name,
+              action: form.action,
+              resource: form.resource,
+              parameters: JSON.parse(form.parametersText || "{}"),
+              timestamp: new Date().toISOString()
+            };
+            const nextResult = await request("/v1/tool-call", {
+              method: "POST",
+              body: JSON.stringify(payload)
+            });
+            setResult(nextResult);
+            await refresh();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        async function runDemoSequence() {
+          setLoading(true);
+          setError("");
+          const sessionId = `dashboard-demo-${Date.now()}`;
+          try {
+            for (const template of [templates.crm, templates.finance, templates.delete]) {
+              await request("/v1/tool-call", {
+                method: "POST",
+                body: JSON.stringify({
+                  agent_id: "dashboard-agent",
+                  session_id: sessionId,
+                  tool_name: template.tool_name,
+                  action: template.action,
+                  resource: template.resource,
+                  parameters: template.parameters,
+                  timestamp: new Date().toISOString()
+                })
+              });
+            }
+            await refresh();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        async function decideApproval(approvalId, decision) {
+          setLoading(true);
+          setError("");
+          try {
+            await request(`/v1/approvals/${approvalId}/${decision}`, { method: "POST" });
+            await refresh();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        return (
+          <main className="shell">
+            <header className="topbar">
+              <div className="brand">
+                <span className="brand-mark"><Icon name="shield-check" size={22} /></span>
+                <div>
+                  <h1>ActGuard</h1>
+                  <p>Runtime control plane for AI-agent tool calls</p>
+                </div>
+              </div>
+              <div className="top-actions">
+                <button className="btn-secondary" onClick={refresh} disabled={loading} title="Refresh dashboard data">
+                  <Icon name="refresh-cw" /> Refresh
+                </button>
+                <button className="btn-primary" onClick={runDemoSequence} disabled={loading} title="Run mock CRM, finance, delete sequence">
+                  <Icon name="play" /> Run Demo
+                </button>
+              </div>
+            </header>
+
+            {error && <div className="error">{error}</div>}
+
+            <section className="summary">
+              <div className="metric allow"><span>Allowed</span><strong>{stats.allow}</strong></div>
+              <div className="metric approval"><span>Approval Required</span><strong>{stats.require_approval}</strong></div>
+              <div className="metric block"><span>Blocked</span><strong>{stats.block}</strong></div>
+              <div className="metric pending"><span>Pending Approvals</span><strong>{approvals.length}</strong></div>
+            </section>
+
+            <section className="grid">
+              <div className="panel">
+                <div className="panel-header">
+                  <div className="panel-title">
+                    <Icon name="send" />
+                    <div>
+                      <h2>Tool-Call Tester</h2>
+                      <span>Submit a mock action to the gateway</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="panel-body">
+                  <div className="template-row">
+                    {Object.entries(templates).map(([key, template]) => (
+                      <button
+                        key={key}
+                        className={selectedTemplate === key ? "btn-primary" : ""}
+                        onClick={() => applyTemplate(key)}
+                        type="button"
+                      >
+                        <Icon name={template.icon} /> {template.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <form className="form-grid" onSubmit={submitToolCall} style={{ marginTop: 14 }}>
+                    <div className="field-grid">
+                      <label>
+                        Agent
+                        <input value={form.agent_id} onChange={(event) => setForm({ ...form, agent_id: event.target.value })} />
+                      </label>
+                      <label>
+                        Session
+                        <input value={form.session_id} onChange={(event) => setForm({ ...form, session_id: event.target.value })} />
+                      </label>
+                    </div>
+                    <div className="field-grid">
+                      <label>
+                        Tool
+                        <input value={form.tool_name} onChange={(event) => setForm({ ...form, tool_name: event.target.value })} />
+                      </label>
+                      <label>
+                        Action
+                        <input value={form.action} onChange={(event) => setForm({ ...form, action: event.target.value })} />
+                      </label>
+                    </div>
+                    <label>
+                      Resource
+                      <input value={form.resource} onChange={(event) => setForm({ ...form, resource: event.target.value })} />
+                    </label>
+                    <label>
+                      Parameters JSON
+                      <textarea value={form.parametersText} onChange={(event) => setForm({ ...form, parametersText: event.target.value })} />
+                    </label>
+                    <button className="btn-primary" type="submit" disabled={loading}>
+                      <Icon name="shield" /> Evaluate
+                    </button>
+                  </form>
+
+                  <div className="result-box">
+                    {result ? (
+                      <>
+                        <div className="decision-row">
+                          <DecisionPill value={result.decision} />
+                          <span className="muted">Risk {result.risk_score}</span>
+                        </div>
+                        <p className="muted">{result.reason}</p>
+                        <p className="muted"><code>{result.trace_id}</code></p>
+                      </>
+                    ) : (
+                      <div className="result-empty">No decision selected</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <div className="panel-title">
+                    <Icon name="user-check" />
+                    <div>
+                      <h2>Approval Queue</h2>
+                      <span>{approvals.length} pending</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="panel-body">
+                  <div className="approval-list">
+                    {approvals.length === 0 ? (
+                      <div className="empty-state">No pending approvals</div>
+                    ) : approvals.map((item) => {
+                      const raw = parseRaw(item.raw_request_json);
+                      return (
+                        <article className="approval-item" key={item.approval_id}>
+                          <header>
+                            <div>
+                              <h3>{item.tool_name} / {item.action}</h3>
+                              <p>{item.reason}</p>
+                            </div>
+                            <DecisionPill value={item.status} />
+                          </header>
+                          <p className="muted">
+                            {item.agent_id} &middot; {item.session_id} &middot; risk {item.risk_score}
+                          </p>
+                          <p className="muted"><code>{raw.resource || item.resource}</code></p>
+                          <div className="approval-actions">
+                            <button className="btn-approve" onClick={() => decideApproval(item.approval_id, "approve")} disabled={loading}>
+                              <Icon name="check" /> Approve
+                            </button>
+                            <button className="btn-reject" onClick={() => decideApproval(item.approval_id, "reject")} disabled={loading}>
+                              <Icon name="x" /> Reject
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel audit-panel">
+                <div className="panel-header">
+                  <div className="panel-title">
+                    <Icon name="list-tree" />
+                    <div>
+                      <h2>Audit Log</h2>
+                      <span>{auditLogs.length} decisions recorded</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="panel-body">
+                  <div className="table-wrap">
+                    {auditLogs.length === 0 ? (
+                      <div className="empty-state">No audit entries</div>
+                    ) : (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Time</th>
+                            <th>Decision</th>
+                            <th>Agent</th>
+                            <th>Session</th>
+                            <th>Tool</th>
+                            <th>Action</th>
+                            <th>Policy</th>
+                            <th>Risk</th>
+                            <th>Trace</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auditLogs.map((entry) => (
+                            <tr key={entry.trace_id}>
+                              <td>{formatTime(entry.timestamp)}</td>
+                              <td><DecisionPill value={entry.decision} /></td>
+                              <td>{entry.agent_id}</td>
+                              <td>{entry.session_id}</td>
+                              <td>{entry.tool_name}</td>
+                              <td>{entry.action}</td>
+                              <td>{entry.matched_policy_id || "default_allow"}</td>
+                              <td>{entry.risk_score}</td>
+                              <td><code>{entry.trace_id.slice(0, 8)}</code></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

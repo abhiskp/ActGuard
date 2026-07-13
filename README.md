@@ -29,7 +29,21 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
 
-The server listens on `http://127.0.0.1:8000` by default. API docs are available at `http://127.0.0.1:8000/docs`.
+The server listens on `http://127.0.0.1:8000` by default.
+
+- Dashboard: `http://127.0.0.1:8000/`
+- API docs: `http://127.0.0.1:8000/docs`
+
+## Dashboard
+
+The dashboard is served by FastAPI from `static/index.html`. It includes:
+
+- a mock tool-call tester
+- a pending approval queue with approve and reject actions
+- decision counters
+- an audit log table
+
+No frontend build step is required.
 
 ## Tool-Call API
 
@@ -68,6 +82,12 @@ Response:
 curl http://127.0.0.1:8000/v1/approvals
 curl -X POST http://127.0.0.1:8000/v1/approvals/{approval_id}/approve
 curl -X POST http://127.0.0.1:8000/v1/approvals/{approval_id}/reject
+```
+
+## Audit API
+
+```bash
+curl http://127.0.0.1:8000/v1/audit-logs
 ```
 
 ## Policy Format
@@ -131,6 +151,8 @@ The script uses a running local server when one is available. If not, it falls b
 ```bash
 pytest
 ```
+
+GitHub Actions runs the test suite on pushes and pull requests to `main` using Python 3.11 and 3.12.
 
 ## Docker
 
