@@ -20,5 +20,5 @@ jobs:
         uses: sshnaidm/gemini-code-review-action@v2
         with:
           gemini-key: ${{ secrets.GEMINI_API_KEY }}
-          model: "gemini-2.5-flash"
-          thinking: "dynamic"
+          model: "gemini-3.5-flash"
+          thinking: "none"
