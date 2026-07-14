@@ -8,8 +8,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import app.main as main_module
 from app.database import initialize_database
 from app.main import app, get_sequence_detector
+from app.policy_engine import PolicyEngine
 from app.sequence_detector import SequenceDetector
 
 
@@ -19,6 +21,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.setenv("ACTGUARD_DB_PATH", str(database_path))
     initialize_database(database_path)
     detector = SequenceDetector()
+    main_module.policy_engine = PolicyEngine.from_yaml(Path("config/policies.yaml"))
     app.dependency_overrides[get_sequence_detector] = lambda: detector
     with TestClient(app) as test_client:
         yield test_client
@@ -181,3 +184,47 @@ def test_dashboard_route_serves_html(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "ActGuard Control Plane" in response.text
+
+
+def test_policy_reload_reports_success(client: TestClient) -> None:
+    response = client.post("/v1/policies/reload")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "reloaded",
+        "policy_count": 9,
+        "message": "Policies reloaded successfully.",
+    }
+
+
+def test_policy_reload_returns_validation_errors(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invalid_policy_path = tmp_path / "invalid-policies.yaml"
+    invalid_policy_path.write_text(
+        """
+policies:
+  - id: invalid_reload_policy
+    effect: block
+    conditions:
+      parameters:
+        - path: count
+          not_an_operator: 5
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main_module, "POLICY_PATH", invalid_policy_path)
+
+    response = client.post("/v1/policies/reload")
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": {
+            "message": "Policy validation failed.",
+            "errors": [
+                "policies[0].conditions.parameters[0] has unsupported operator(s): not_an_operator."
+            ],
+        }
+    }

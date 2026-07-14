@@ -110,6 +110,10 @@ Supported conditions:
 - `resource.equals`
 - parameter `equals`
 - parameter `greater_than`
+- parameter `less_than`
+- parameter `contains`
+- parameter `regex`
+- scalar or parameter `in`
 - ordered `sequence` rules based on previous tool calls in the same session plus the current call
 
 Example:
@@ -130,6 +134,14 @@ Example:
         equals: financial
       - path: cross_border
         equals: true
+```
+
+Policies are validated when ActGuard starts and whenever they are reloaded. Validation errors include the exact policy path, such as `policies[0].conditions.parameters[0]`.
+
+Reload policies without restarting the server:
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/policies/reload
 ```
 
 ## Demo

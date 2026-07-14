@@ -70,3 +70,9 @@ class ApprovalItem(BaseModel):
 class ApprovalDecisionResponse(BaseModel):
     approval_id: str
     status: ApprovalStatus
+
+
+class PolicyReloadResponse(BaseModel):
+    status: str
+    policy_count: int
+    message: str
