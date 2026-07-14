@@ -14,6 +14,20 @@ policies:
         - path: count
           greater_than: 5
 
+  - id: block_dangerous_admin_actions
+    description: Block dangerous administrative mock-tool actions.
+    priority: 98
+    effect: block
+    risk_score: 98
+    reason: Dangerous administrative actions are blocked by policy.
+    conditions:
+      tool_name:
+        equals: admin
+      action:
+        in:
+          - disable_mfa
+          - rotate_root_key
+
   - id: block_external_data_transfer
     description: Block transfers to external destinations.
     priority: 90
@@ -26,6 +40,36 @@ policies:
       parameters:
         - path: destination_type
           equals: external
+
+  - id: require_approval_partner_domain_transfer
+    description: Require approval for transfers to partner domains matching a risky pattern.
+    priority: 88
+    effect: require_approval
+    risk_score: 72
+    reason: Partner-domain transfer matches a risky destination pattern.
+    conditions:
+      action:
+        equals: transfer
+      parameters:
+        - path: destination_type
+          equals: partner
+        - path: destination_domain
+          regex: ".*\\.external\\.example$"
+
+  - id: block_sensitive_crm_field_lookup
+    description: Block CRM reads that request sensitive fields.
+    priority: 85
+    effect: block
+    risk_score: 84
+    reason: CRM lookup requests sensitive fields.
+    conditions:
+      tool_name:
+        equals: crm
+      action:
+        equals: read
+      parameters:
+        - path: fields
+          contains: ssn
 
   - id: suspicious_crm_finance_delete_sequence
     description: Flag the sequence of CRM read, financial export, then file deletion.
@@ -64,6 +108,21 @@ policies:
           equals: financial
         - path: cross_border
           equals: true
+
+  - id: allow_small_file_delete
+    description: Allow low-volume mock file deletes.
+    priority: 20
+    effect: allow
+    risk_score: 25
+    reason: Low-volume mock file delete is allowed.
+    conditions:
+      tool_name:
+        equals: file_store
+      action:
+        equals: delete
+      parameters:
+        - path: count
+          less_than: 3
 
   - id: allow_read_only_crm_lookup
     description: Allow read-only CRM customer lookup.

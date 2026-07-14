@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -17,10 +17,11 @@ from app.models import (
     ApprovalDecisionResponse,
     ApprovalItem,
     Decision,
+    PolicyReloadResponse,
     ToolCallDecision,
     ToolCallRequest,
 )
-from app.policy_engine import PolicyEngine
+from app.policy_engine import PolicyEngine, PolicyValidationError
 from app.sequence_detector import SequenceDetector, ToolCallEvent
 
 POLICY_PATH = Path("config/policies.yaml")
@@ -55,6 +56,10 @@ def get_policy_engine() -> PolicyEngine:
 
 def get_sequence_detector() -> SequenceDetector:
     return sequence_detector
+
+
+def reload_policy_engine_from_disk() -> PolicyEngine:
+    return PolicyEngine.from_yaml(POLICY_PATH)
 
 
 @app.get("/", include_in_schema=False)
@@ -105,6 +110,25 @@ def list_approvals(db_path: Path = Depends(get_db_path)) -> list[ApprovalItem]:
 @app.get("/v1/audit-logs", response_model=list[AuditLogEntry])
 def list_audit_logs(db_path: Path = Depends(get_db_path)) -> list[AuditLogEntry]:
     return AuditLogRepository(db_path).list_entries()
+
+
+@app.post("/v1/policies/reload", response_model=PolicyReloadResponse)
+def reload_policies() -> PolicyReloadResponse:
+    global policy_engine
+    try:
+        next_engine = reload_policy_engine_from_disk()
+    except PolicyValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "Policy validation failed.", "errors": exc.errors},
+        ) from exc
+
+    policy_engine = next_engine
+    return PolicyReloadResponse(
+        status="reloaded",
+        policy_count=len(policy_engine.policies),
+        message="Policies reloaded successfully.",
+    )
 
 
 @app.post(
