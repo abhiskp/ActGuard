@@ -21,4 +21,4 @@ jobs:
         with:
           gemini-key: ${{ secrets.GEMINI_API_KEY }}
           model: "gemini-3.5-flash"
-          thinking: "dynamic"
+          thinking: "dynamic"   #thinking - dynamic or off or a number. 
