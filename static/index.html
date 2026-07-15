@@ -125,6 +125,15 @@
         justify-content: flex-end;
       }
 
+      .token-field {
+        min-width: 240px;
+      }
+
+      .token-field input {
+        background: white;
+        min-height: 38px;
+      }
+
       .btn-primary {
         background: var(--ink);
         color: white;
@@ -549,6 +558,9 @@
         const [result, setResult] = useState(null);
         const [loading, setLoading] = useState(false);
         const [error, setError] = useState("");
+        const [adminToken, setAdminToken] = useState(
+          () => window.localStorage.getItem("actguard_admin_token") || ""
+        );
 
         const stats = useMemo(() => {
           return auditLogs.reduce(
@@ -570,6 +582,10 @@
           }
         });
 
+        useEffect(() => {
+          window.localStorage.setItem("actguard_admin_token", adminToken);
+        }, [adminToken]);
+
         function toForm(template) {
           return {
             agent_id: "dashboard-agent",
@@ -582,9 +598,13 @@
         }
 
         async function request(path, options = {}) {
+          const headers = {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+          };
           const response = await fetch(path, {
-            headers: { "Content-Type": "application/json" },
-            ...options
+            ...options,
+            headers
           });
           if (!response.ok) {
             const body = await response.text();
@@ -671,7 +691,10 @@
           setLoading(true);
           setError("");
           try {
-            await request(`/v1/approvals/${approvalId}/${decision}`, { method: "POST" });
+            await request(`/v1/approvals/${approvalId}/${decision}`, {
+              method: "POST",
+              headers: { "X-ActGuard-Admin-Token": adminToken }
+            });
             await refresh();
           } catch (err) {
             setError(err.message);
@@ -691,6 +714,15 @@
                 </div>
               </div>
               <div className="top-actions">
+                <label className="token-field">
+                  Admin Token
+                  <input
+                    type="password"
+                    value={adminToken}
+                    onChange={(event) => setAdminToken(event.target.value)}
+                    placeholder="Required for approvals"
+                  />
+                </label>
                 <button className="btn-secondary" onClick={refresh} disabled={loading} title="Refresh dashboard data">
                   <Icon name="refresh-cw" /> Refresh
                 </button>
