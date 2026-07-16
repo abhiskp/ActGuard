@@ -26,6 +26,7 @@ pip install -e ".[dev]"
 ## Run The API
 
 ```bash
+export ACTGUARD_ADMIN_TOKEN="change-me-local-dev"
 uvicorn app.main:app --reload
 ```
 
@@ -44,6 +45,8 @@ The dashboard is served by FastAPI from `static/index.html`. It includes:
 - an audit log table
 
 No frontend build step is required.
+
+The dashboard has an Admin Token field. Use the same value as `ACTGUARD_ADMIN_TOKEN` when approving or rejecting items.
 
 ## Tool-Call API
 
@@ -80,8 +83,10 @@ Response:
 
 ```bash
 curl http://127.0.0.1:8000/v1/approvals
-curl -X POST http://127.0.0.1:8000/v1/approvals/{approval_id}/approve
-curl -X POST http://127.0.0.1:8000/v1/approvals/{approval_id}/reject
+curl -X POST http://127.0.0.1:8000/v1/approvals/{approval_id}/approve \
+  -H "X-ActGuard-Admin-Token: change-me-local-dev"
+curl -X POST http://127.0.0.1:8000/v1/approvals/{approval_id}/reject \
+  -H "X-ActGuard-Admin-Token: change-me-local-dev"
 ```
 
 ## Audit API
@@ -141,8 +146,20 @@ Policies are validated when ActGuard starts and whenever they are reloaded. Vali
 Reload policies without restarting the server:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/policies/reload
+curl -X POST http://127.0.0.1:8000/v1/policies/reload \
+  -H "X-ActGuard-Admin-Token: change-me-local-dev"
 ```
+
+## Admin Protection
+
+ActGuard protects administrative actions with an API token:
+
+- approval decisions
+- policy reloads
+
+Set `ACTGUARD_ADMIN_TOKEN` before starting the server. Send the same value in the `X-ActGuard-Admin-Token` header for protected endpoints.
+
+If `ACTGUARD_ADMIN_TOKEN` is not configured, admin endpoints fail closed with `503 Service Unavailable`. If a request omits the token or sends the wrong token, ActGuard returns `401 Unauthorized`.
 
 ## Demo
 
@@ -169,6 +186,7 @@ GitHub Actions runs the test suite on pushes and pull requests to `main` using P
 ## Docker
 
 ```bash
+export ACTGUARD_ADMIN_TOKEN="change-me-local-dev"
 docker compose up --build
 ```
 

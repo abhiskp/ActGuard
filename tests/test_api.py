@@ -14,11 +14,15 @@ from app.main import app, get_sequence_detector
 from app.policy_engine import PolicyEngine
 from app.sequence_detector import SequenceDetector
 
+ADMIN_TOKEN = "test-admin-token"
+ADMIN_HEADERS = {"X-ActGuard-Admin-Token": ADMIN_TOKEN}
+
 
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     database_path = tmp_path / "actguard-test.db"
     monkeypatch.setenv("ACTGUARD_DB_PATH", str(database_path))
+    monkeypatch.setenv("ACTGUARD_ADMIN_TOKEN", ADMIN_TOKEN)
     initialize_database(database_path)
     detector = SequenceDetector()
     main_module.policy_engine = PolicyEngine.from_yaml(Path("config/policies.yaml"))
@@ -135,7 +139,10 @@ def test_approval_flow_approve_and_reject(client: TestClient) -> None:
     )
     approval_id = client.get("/v1/approvals").json()[0]["approval_id"]
 
-    approve_response = client.post(f"/v1/approvals/{approval_id}/approve")
+    approve_response = client.post(
+        f"/v1/approvals/{approval_id}/approve",
+        headers=ADMIN_HEADERS,
+    )
 
     assert approve_response.status_code == 200
     assert approve_response.json() == {
@@ -144,7 +151,10 @@ def test_approval_flow_approve_and_reject(client: TestClient) -> None:
     }
     assert client.get("/v1/approvals").json() == []
 
-    reject_response = client.post(f"/v1/approvals/{approval_id}/reject")
+    reject_response = client.post(
+        f"/v1/approvals/{approval_id}/reject",
+        headers=ADMIN_HEADERS,
+    )
     assert reject_response.status_code == 404
 
 
@@ -187,7 +197,7 @@ def test_dashboard_route_serves_html(client: TestClient) -> None:
 
 
 def test_policy_reload_reports_success(client: TestClient) -> None:
-    response = client.post("/v1/policies/reload")
+    response = client.post("/v1/policies/reload", headers=ADMIN_HEADERS)
 
     assert response.status_code == 200
     assert response.json() == {
@@ -217,7 +227,7 @@ policies:
     )
     monkeypatch.setattr(main_module, "POLICY_PATH", invalid_policy_path)
 
-    response = client.post("/v1/policies/reload")
+    response = client.post("/v1/policies/reload", headers=ADMIN_HEADERS)
 
     assert response.status_code == 400
     assert response.json() == {
@@ -228,3 +238,47 @@ policies:
             ],
         }
     }
+
+
+def test_admin_endpoints_reject_missing_token(client: TestClient) -> None:
+    response = client.post("/v1/policies/reload")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Valid ActGuard admin token required."}
+
+
+def test_admin_endpoints_reject_invalid_token(client: TestClient) -> None:
+    response = client.post(
+        "/v1/policies/reload",
+        headers={"X-ActGuard-Admin-Token": "wrong-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Valid ActGuard admin token required."}
+
+
+def test_admin_endpoints_fail_closed_when_token_is_not_configured(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ACTGUARD_ADMIN_TOKEN", raising=False)
+
+    response = client.post("/v1/policies/reload", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ACTGUARD_ADMIN_TOKEN is not configured."}
+
+
+def test_admin_endpoints_fail_closed_for_whitespace_only_server_token(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ACTGUARD_ADMIN_TOKEN", "   ")
+
+    response = client.post(
+        "/v1/policies/reload",
+        headers={"X-ActGuard-Admin-Token": "   "},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ACTGUARD_ADMIN_TOKEN is not configured."}

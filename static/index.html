@@ -125,6 +125,15 @@
         justify-content: flex-end;
       }
 
+      .token-field {
+        min-width: 240px;
+      }
+
+      .token-field input {
+        background: white;
+        min-height: 38px;
+      }
+
       .btn-primary {
         background: var(--ink);
         color: white;
@@ -549,6 +558,13 @@
         const [result, setResult] = useState(null);
         const [loading, setLoading] = useState(false);
         const [error, setError] = useState("");
+        const [adminToken, setAdminToken] = useState(() => {
+          try {
+            return window.localStorage.getItem("actguard_admin_token") || "";
+          } catch {
+            return "";
+          }
+        });
 
         const stats = useMemo(() => {
           return auditLogs.reduce(
@@ -570,6 +586,14 @@
           }
         });
 
+        useEffect(() => {
+          try {
+            window.localStorage.setItem("actguard_admin_token", adminToken);
+          } catch {
+            // Ignore storage errors so strict browser privacy settings do not break the dashboard.
+          }
+        }, [adminToken]);
+
         function toForm(template) {
           return {
             agent_id: "dashboard-agent",
@@ -582,13 +606,28 @@
         }
 
         async function request(path, options = {}) {
+          const headers = {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+          };
           const response = await fetch(path, {
-            headers: { "Content-Type": "application/json" },
-            ...options
+            ...options,
+            headers
           });
           if (!response.ok) {
-            const body = await response.text();
-            throw new Error(body || `Request failed with ${response.status}`);
+            const text = await response.text();
+            let message = text;
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed && parsed.detail) {
+                message = typeof parsed.detail === "string"
+                  ? parsed.detail
+                  : JSON.stringify(parsed.detail);
+              }
+            } catch {
+              // Fall back to the raw response text.
+            }
+            throw new Error(message || `Request failed with ${response.status}`);
           }
           return response.json();
         }
@@ -671,7 +710,10 @@
           setLoading(true);
           setError("");
           try {
-            await request(`/v1/approvals/${approvalId}/${decision}`, { method: "POST" });
+            await request(`/v1/approvals/${approvalId}/${decision}`, {
+              method: "POST",
+              headers: { "X-ActGuard-Admin-Token": adminToken }
+            });
             await refresh();
           } catch (err) {
             setError(err.message);
@@ -691,6 +733,15 @@
                 </div>
               </div>
               <div className="top-actions">
+                <label className="token-field">
+                  Admin Token
+                  <input
+                    type="password"
+                    value={adminToken}
+                    onChange={(event) => setAdminToken(event.target.value)}
+                    placeholder="Required for approvals"
+                  />
+                </label>
                 <button className="btn-secondary" onClick={refresh} disabled={loading} title="Refresh dashboard data">
                   <Icon name="refresh-cw" /> Refresh
                 </button>

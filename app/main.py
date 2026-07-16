@@ -22,6 +22,7 @@ from app.models import (
     ToolCallRequest,
 )
 from app.policy_engine import PolicyEngine, PolicyValidationError
+from app.security import require_admin_token
 from app.sequence_detector import SequenceDetector, ToolCallEvent
 
 POLICY_PATH = Path("config/policies.yaml")
@@ -112,7 +113,11 @@ def list_audit_logs(db_path: Path = Depends(get_db_path)) -> list[AuditLogEntry]
     return AuditLogRepository(db_path).list_entries()
 
 
-@app.post("/v1/policies/reload", response_model=PolicyReloadResponse)
+@app.post(
+    "/v1/policies/reload",
+    response_model=PolicyReloadResponse,
+    dependencies=[Depends(require_admin_token)],
+)
 def reload_policies() -> PolicyReloadResponse:
     global policy_engine
     try:
@@ -134,6 +139,7 @@ def reload_policies() -> PolicyReloadResponse:
 @app.post(
     "/v1/approvals/{approval_id}/approve",
     response_model=ApprovalDecisionResponse,
+    dependencies=[Depends(require_admin_token)],
 )
 def approve_item(
     approval_id: str,
@@ -145,6 +151,7 @@ def approve_item(
 @app.post(
     "/v1/approvals/{approval_id}/reject",
     response_model=ApprovalDecisionResponse,
+    dependencies=[Depends(require_admin_token)],
 )
 def reject_item(
     approval_id: str,
