@@ -12,14 +12,15 @@ ADMIN_TOKEN_HEADER = "X-ActGuard-Admin-Token"
 def require_admin_token(
     admin_token: str | None = Header(default=None, alias=ADMIN_TOKEN_HEADER),
 ) -> None:
-    expected_token = os.getenv(ADMIN_TOKEN_ENV)
+    expected_token = os.getenv(ADMIN_TOKEN_ENV, "").strip()
     if not expected_token:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"{ADMIN_TOKEN_ENV} is not configured.",
         )
 
-    if not admin_token or not compare_digest(admin_token, expected_token):
+    submitted_token = admin_token.strip() if admin_token else ""
+    if not submitted_token or not compare_digest(submitted_token, expected_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Valid ActGuard admin token required.",

@@ -558,9 +558,13 @@
         const [result, setResult] = useState(null);
         const [loading, setLoading] = useState(false);
         const [error, setError] = useState("");
-        const [adminToken, setAdminToken] = useState(
-          () => window.localStorage.getItem("actguard_admin_token") || ""
-        );
+        const [adminToken, setAdminToken] = useState(() => {
+          try {
+            return window.localStorage.getItem("actguard_admin_token") || "";
+          } catch {
+            return "";
+          }
+        });
 
         const stats = useMemo(() => {
           return auditLogs.reduce(
@@ -583,7 +587,11 @@
         });
 
         useEffect(() => {
-          window.localStorage.setItem("actguard_admin_token", adminToken);
+          try {
+            window.localStorage.setItem("actguard_admin_token", adminToken);
+          } catch {
+            // Ignore storage errors so strict browser privacy settings do not break the dashboard.
+          }
         }, [adminToken]);
 
         function toForm(template) {
@@ -607,8 +615,19 @@
             headers
           });
           if (!response.ok) {
-            const body = await response.text();
-            throw new Error(body || `Request failed with ${response.status}`);
+            const text = await response.text();
+            let message = text;
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed && parsed.detail) {
+                message = typeof parsed.detail === "string"
+                  ? parsed.detail
+                  : JSON.stringify(parsed.detail);
+              }
+            } catch {
+              // Fall back to the raw response text.
+            }
+            throw new Error(message || `Request failed with ${response.status}`);
           }
           return response.json();
         }

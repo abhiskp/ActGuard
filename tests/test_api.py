@@ -267,3 +267,18 @@ def test_admin_endpoints_fail_closed_when_token_is_not_configured(
 
     assert response.status_code == 503
     assert response.json() == {"detail": "ACTGUARD_ADMIN_TOKEN is not configured."}
+
+
+def test_admin_endpoints_fail_closed_for_whitespace_only_server_token(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ACTGUARD_ADMIN_TOKEN", "   ")
+
+    response = client.post(
+        "/v1/policies/reload",
+        headers={"X-ActGuard-Admin-Token": "   "},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ACTGUARD_ADMIN_TOKEN is not configured."}
