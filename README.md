@@ -93,7 +93,19 @@ curl -X POST http://127.0.0.1:8000/v1/approvals/{approval_id}/reject \
 
 ```bash
 curl http://127.0.0.1:8000/v1/audit-logs
+curl "http://127.0.0.1:8000/v1/audit-logs?decision=block&limit=25&offset=0"
+curl "http://127.0.0.1:8000/v1/audit-logs?agent_id=agent-api&session_id=session-api"
 ```
+
+Supported audit log query parameters:
+
+- `limit`: page size from `1` to `200`, default `50`
+- `offset`: page offset, default `0`
+- `agent_id`
+- `session_id`
+- `decision`: `allow`, `block`, or `require_approval`
+- `tool_name`
+- `action`
 
 ## Policy Format
 

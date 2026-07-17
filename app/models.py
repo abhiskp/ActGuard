@@ -45,6 +45,13 @@ class AuditLogEntry(BaseModel):
     raw_request_json: str
 
 
+class AuditLogPage(BaseModel):
+    items: list[AuditLogEntry]
+    total: int = Field(..., ge=0)
+    limit: int = Field(..., ge=1)
+    offset: int = Field(..., ge=0)
+
+
 class ApprovalStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
