@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 
 from app.database import get_connection
-from app.models import AuditLogEntry, ToolCallDecision, ToolCallRequest
+from app.models import (
+    AuditLogEntry,
+    AuditLogPage,
+    Decision,
+    ToolCallDecision,
+    ToolCallRequest,
+)
 
 
 class AuditLogRepository:
@@ -63,24 +69,65 @@ class AuditLogRepository:
             connection.commit()
         return entry
 
-    def list_entries(self) -> list[AuditLogEntry]:
+    def list_entries(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        agent_id: str | None = None,
+        session_id: str | None = None,
+        decision: Decision | None = None,
+        tool_name: str | None = None,
+        action: str | None = None,
+    ) -> AuditLogPage:
+        where_clauses: list[str] = []
+        values: list[object] = []
+        filters = {
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "decision": decision.value if decision else None,
+            "tool_name": tool_name,
+            "action": action,
+        }
+        for column, value in filters.items():
+            if value is None:
+                continue
+            where_clauses.append(f"{column} = ?")
+            values.append(value)
+
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         with get_connection(self.database_path) as connection:
+            total = connection.execute(
+                f"SELECT COUNT(*) AS total FROM audit_logs {where_sql}",
+                values,
+            ).fetchone()["total"]
             rows = connection.execute(
-                "SELECT * FROM audit_logs ORDER BY timestamp DESC"
+                f"""
+                SELECT * FROM audit_logs
+                {where_sql}
+                ORDER BY timestamp DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*values, limit, offset],
             ).fetchall()
-        return [
-            AuditLogEntry(
-                trace_id=row["trace_id"],
-                timestamp=row["timestamp"],
-                agent_id=row["agent_id"],
-                session_id=row["session_id"],
-                tool_name=row["tool_name"],
-                action=row["action"],
-                decision=row["decision"],
-                reason=row["reason"],
-                matched_policy_id=row["matched_policy_id"],
-                risk_score=row["risk_score"],
-                raw_request_json=json.dumps(json.loads(row["raw_request_json"])),
-            )
-            for row in rows
-        ]
+        return AuditLogPage(
+            items=[
+                AuditLogEntry(
+                    trace_id=row["trace_id"],
+                    timestamp=row["timestamp"],
+                    agent_id=row["agent_id"],
+                    session_id=row["session_id"],
+                    tool_name=row["tool_name"],
+                    action=row["action"],
+                    decision=row["decision"],
+                    reason=row["reason"],
+                    matched_policy_id=row["matched_policy_id"],
+                    risk_score=row["risk_score"],
+                    raw_request_json=json.dumps(json.loads(row["raw_request_json"])),
+                )
+                for row in rows
+            ],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )

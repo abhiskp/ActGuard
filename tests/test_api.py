@@ -119,13 +119,100 @@ def test_audit_logs_include_every_tool_call_decision(client: TestClient) -> None
     response = client.get("/v1/audit-logs")
 
     assert response.status_code == 200
-    logs = response.json()
+    page = response.json()
+    logs = page["items"]
+    assert page["total"] == 2
+    assert page["limit"] == 50
+    assert page["offset"] == 0
     assert [entry["trace_id"] for entry in logs] == [
         second["trace_id"],
         first["trace_id"],
     ]
     assert logs[0]["decision"] == "block"
     assert logs[1]["decision"] == "allow"
+
+
+def test_audit_logs_filter_by_decision(client: TestClient) -> None:
+    client.post(
+        "/v1/tool-call",
+        json=payload(tool_name="crm", action="read"),
+    )
+    blocked = client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="file_store",
+            action="delete",
+            parameters={"count": 10},
+        ),
+    ).json()
+
+    response = client.get("/v1/audit-logs", params={"decision": "block"})
+
+    assert response.status_code == 200
+    page = response.json()
+    assert page["total"] == 1
+    assert [entry["trace_id"] for entry in page["items"]] == [blocked["trace_id"]]
+
+
+def test_audit_logs_filter_by_session_tool_and_action(client: TestClient) -> None:
+    client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="crm",
+            action="read",
+            session_id="session-one",
+        ),
+    )
+    expected = client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="finance",
+            action="export",
+            parameters={"report_type": "financial", "cross_border": True},
+            session_id="session-two",
+        ),
+    ).json()
+
+    response = client.get(
+        "/v1/audit-logs",
+        params={
+            "session_id": "session-two",
+            "tool_name": "finance",
+            "action": "export",
+        },
+    )
+
+    assert response.status_code == 200
+    page = response.json()
+    assert page["total"] == 1
+    assert [entry["trace_id"] for entry in page["items"]] == [expected["trace_id"]]
+
+
+def test_audit_logs_paginate_results(client: TestClient) -> None:
+    first = client.post(
+        "/v1/tool-call",
+        json=payload(tool_name="crm", action="read"),
+    ).json()
+    second = client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="file_store",
+            action="delete",
+            parameters={"count": 10},
+        ),
+    ).json()
+
+    first_page = client.get("/v1/audit-logs", params={"limit": 1, "offset": 0}).json()
+    second_page = client.get("/v1/audit-logs", params={"limit": 1, "offset": 1}).json()
+
+    assert first_page["total"] == 2
+    assert first_page["limit"] == 1
+    assert first_page["offset"] == 0
+    assert [entry["trace_id"] for entry in first_page["items"]] == [second["trace_id"]]
+    assert second_page["total"] == 2
+    assert second_page["limit"] == 1
+    assert second_page["offset"] == 1
+    assert [entry["trace_id"] for entry in second_page["items"]] == [first["trace_id"]]
 
 
 def test_approval_flow_approve_and_reject(client: TestClient) -> None:

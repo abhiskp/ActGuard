@@ -441,6 +441,27 @@
         justify-content: space-between;
       }
 
+      .filter-grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        margin-bottom: 12px;
+      }
+
+      .pagination-row {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+        margin-top: 12px;
+      }
+
+      .pagination-actions {
+        display: flex;
+        gap: 8px;
+      }
+
       .error {
         background: var(--rose-soft);
         border: 1px solid #fecdd3;
@@ -463,7 +484,8 @@
         .grid,
         .summary,
         .field-grid,
-        .template-row {
+        .template-row,
+        .filter-grid {
           grid-template-columns: 1fr;
         }
 
@@ -552,6 +574,16 @@
 
       function App() {
         const [auditLogs, setAuditLogs] = useState([]);
+        const [auditPage, setAuditPage] = useState({ total: 0, limit: 50, offset: 0 });
+        const [auditFilters, setAuditFilters] = useState({
+          decision: "",
+          agent_id: "",
+          session_id: "",
+          tool_name: "",
+          action: "",
+          limit: 50,
+          offset: 0
+        });
         const [approvals, setApprovals] = useState([]);
         const [selectedTemplate, setSelectedTemplate] = useState("crm");
         const [form, setForm] = useState(() => toForm(templates.crm));
@@ -632,18 +664,60 @@
           return response.json();
         }
 
-        async function refresh() {
+        async function refresh(filters = auditFilters) {
           setError("");
           try {
+            const query = new URLSearchParams();
+            Object.entries(filters).forEach(([key, value]) => {
+              if (value !== "" && value !== null && value !== undefined) {
+                query.set(key, value);
+              }
+            });
             const [logs, queue] = await Promise.all([
-              request("/v1/audit-logs"),
+              request(`/v1/audit-logs?${query.toString()}`),
               request("/v1/approvals")
             ]);
-            setAuditLogs(logs);
+            setAuditLogs(logs.items);
+            setAuditPage({
+              total: logs.total,
+              limit: logs.limit,
+              offset: logs.offset
+            });
             setApprovals(queue);
           } catch (err) {
             setError(err.message);
           }
+        }
+
+        function updateAuditFilter(key, value) {
+          setAuditFilters((current) => ({
+            ...current,
+            [key]: value,
+            offset: key === "offset" ? value : 0
+          }));
+        }
+
+        function clearAuditFilters() {
+          const nextFilters = {
+            decision: "",
+            agent_id: "",
+            session_id: "",
+            tool_name: "",
+            action: "",
+            limit: 50,
+            offset: 0
+          };
+          setAuditFilters(nextFilters);
+          refresh(nextFilters);
+        }
+
+        function goToAuditOffset(offset) {
+          const nextFilters = {
+            ...auditFilters,
+            offset
+          };
+          setAuditFilters(nextFilters);
+          refresh(nextFilters);
         }
 
         function applyTemplate(key) {
@@ -742,7 +816,7 @@
                     placeholder="Required for approvals"
                   />
                 </label>
-                <button className="btn-secondary" onClick={refresh} disabled={loading} title="Refresh dashboard data">
+                <button className="btn-secondary" onClick={() => refresh()} disabled={loading} title="Refresh dashboard data">
                   <Icon name="refresh-cw" /> Refresh
                 </button>
                 <button className="btn-primary" onClick={runDemoSequence} disabled={loading} title="Run mock CRM, finance, delete sequence">
@@ -886,11 +960,54 @@
                     <Icon name="list-tree" />
                     <div>
                       <h2>Audit Log</h2>
-                      <span>{auditLogs.length} decisions recorded</span>
+                      <span>{auditPage.total} decisions match</span>
                     </div>
                   </div>
                 </div>
                 <div className="panel-body">
+                  <div className="filter-grid">
+                    <label>
+                      Decision
+                      <select value={auditFilters.decision} onChange={(event) => updateAuditFilter("decision", event.target.value)}>
+                        <option value="">Any</option>
+                        <option value="allow">Allow</option>
+                        <option value="require_approval">Require Approval</option>
+                        <option value="block">Block</option>
+                      </select>
+                    </label>
+                    <label>
+                      Agent
+                      <input value={auditFilters.agent_id} onChange={(event) => updateAuditFilter("agent_id", event.target.value)} />
+                    </label>
+                    <label>
+                      Session
+                      <input value={auditFilters.session_id} onChange={(event) => updateAuditFilter("session_id", event.target.value)} />
+                    </label>
+                    <label>
+                      Tool
+                      <input value={auditFilters.tool_name} onChange={(event) => updateAuditFilter("tool_name", event.target.value)} />
+                    </label>
+                    <label>
+                      Action
+                      <input value={auditFilters.action} onChange={(event) => updateAuditFilter("action", event.target.value)} />
+                    </label>
+                    <label>
+                      Limit
+                      <select value={auditFilters.limit} onChange={(event) => updateAuditFilter("limit", Number(event.target.value))}>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="toolbar" style={{ marginBottom: 12 }}>
+                    <button className="btn-secondary" onClick={() => refresh()} disabled={loading} type="button">
+                      <Icon name="search" /> Apply
+                    </button>
+                    <button className="btn-secondary" onClick={clearAuditFilters} disabled={loading} type="button">
+                      <Icon name="eraser" /> Clear
+                    </button>
+                  </div>
                   <div className="table-wrap">
                     {auditLogs.length === 0 ? (
                       <div className="empty-state">No audit entries</div>
@@ -926,6 +1043,33 @@
                         </tbody>
                       </table>
                     )}
+                  </div>
+                  <div className="pagination-row">
+                    <span className="muted">
+                      Showing {auditLogs.length === 0 ? 0 : auditPage.offset + 1}
+                      {"-"}
+                      {Math.min(auditPage.offset + auditLogs.length, auditPage.total)}
+                      {" of "}
+                      {auditPage.total}
+                    </span>
+                    <div className="pagination-actions">
+                      <button
+                        className="btn-secondary"
+                        onClick={() => goToAuditOffset(Math.max(0, auditPage.offset - auditPage.limit))}
+                        disabled={loading || auditPage.offset === 0}
+                        type="button"
+                      >
+                        <Icon name="chevron-left" /> Prev
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => goToAuditOffset(auditPage.offset + auditPage.limit)}
+                        disabled={loading || auditPage.offset + auditPage.limit >= auditPage.total}
+                        type="button"
+                      >
+                        Next <Icon name="chevron-right" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -13,7 +13,7 @@ from app.approvals import ApprovalRepository
 from app.audit_log import AuditLogRepository
 from app.database import get_database_path, initialize_database
 from app.models import (
-    AuditLogEntry,
+    AuditLogPage,
     ApprovalDecisionResponse,
     ApprovalItem,
     Decision,
@@ -108,9 +108,26 @@ def list_approvals(db_path: Path = Depends(get_db_path)) -> list[ApprovalItem]:
     return ApprovalRepository(db_path).list_pending()
 
 
-@app.get("/v1/audit-logs", response_model=list[AuditLogEntry])
-def list_audit_logs(db_path: Path = Depends(get_db_path)) -> list[AuditLogEntry]:
-    return AuditLogRepository(db_path).list_entries()
+@app.get("/v1/audit-logs", response_model=AuditLogPage)
+def list_audit_logs(
+    db_path: Path = Depends(get_db_path),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    agent_id: str | None = None,
+    session_id: str | None = None,
+    decision: Decision | None = None,
+    tool_name: str | None = None,
+    action: str | None = None,
+) -> AuditLogPage:
+    return AuditLogRepository(db_path).list_entries(
+        limit=limit,
+        offset=offset,
+        agent_id=agent_id,
+        session_id=session_id,
+        decision=decision,
+        tool_name=tool_name,
+        action=action,
+    )
 
 
 @app.post(
