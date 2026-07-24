@@ -187,6 +187,22 @@ The demo sends three mock actions:
 
 The script uses a running local server when one is available. If not, it falls back to the in-process FastAPI app.
 
+## Seed Demo Data
+
+Populate the local SQLite database with a richer dashboard dataset:
+
+```bash
+python scripts/seed_demo_data.py --reset
+```
+
+The seed script creates allowed actions, approval-required actions, blocked actions, external transfer blocks, and a suspicious CRM to finance export to file delete sequence. It uses a running local server when one is available. If not, it falls back to the in-process FastAPI app.
+
+Open the dashboard after seeding:
+
+```text
+http://127.0.0.1:8000/
+```
+
 ## Tests
 
 ```bash
