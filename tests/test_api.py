@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 import app.main as main_module
 from app.database import initialize_database
-from app.main import app, get_sequence_detector
+from app.main import app, get_sequence_detector, get_tool_executor
 from app.policy_engine import PolicyEngine
 from app.sequence_detector import SequenceDetector
 
@@ -61,6 +61,8 @@ def test_tool_call_allows_read_only_crm_lookup(client: TestClient) -> None:
     assert body["decision"] == "allow"
     assert body["matched_policy_id"] == "allow_read_only_crm_lookup"
     assert body["trace_id"]
+    assert body["execution"]["status"] == "executed"
+    assert body["execution"]["output"]["source"] == "mock_crm"
 
 
 def test_tool_call_blocks_mass_delete(client: TestClient) -> None:
@@ -77,6 +79,8 @@ def test_tool_call_blocks_mass_delete(client: TestClient) -> None:
     body = response.json()
     assert body["decision"] == "block"
     assert body["matched_policy_id"] == "block_mass_delete"
+    assert body["execution"]["status"] == "blocked"
+    assert body["execution"]["output"] is None
 
 
 def test_tool_call_financial_export_creates_approval(client: TestClient) -> None:
@@ -93,6 +97,7 @@ def test_tool_call_financial_export_creates_approval(client: TestClient) -> None
     body = response.json()
     assert body["decision"] == "require_approval"
     assert body["matched_policy_id"] == "require_approval_financial_export"
+    assert body["execution"]["status"] == "pending_approval"
 
     approvals_response = client.get("/v1/approvals")
     assert approvals_response.status_code == 200
@@ -130,6 +135,8 @@ def test_audit_logs_include_every_tool_call_decision(client: TestClient) -> None
     ]
     assert logs[0]["decision"] == "block"
     assert logs[1]["decision"] == "allow"
+    assert logs[0]["execution"]["status"] == "blocked"
+    assert logs[1]["execution"]["status"] == "executed"
 
 
 def test_audit_logs_filter_by_decision(client: TestClient) -> None:
@@ -216,14 +223,14 @@ def test_audit_logs_paginate_results(client: TestClient) -> None:
 
 
 def test_approval_flow_approve_and_reject(client: TestClient) -> None:
-    client.post(
+    pending = client.post(
         "/v1/tool-call",
         json=payload(
             tool_name="finance",
             action="export",
             parameters={"report_type": "financial", "cross_border": True},
         ),
-    )
+    ).json()
     approval_id = client.get("/v1/approvals").json()[0]["approval_id"]
 
     approve_response = client.post(
@@ -232,17 +239,70 @@ def test_approval_flow_approve_and_reject(client: TestClient) -> None:
     )
 
     assert approve_response.status_code == 200
-    assert approve_response.json() == {
-        "approval_id": approval_id,
-        "status": "approved",
-    }
+    approved = approve_response.json()
+    assert approved["approval_id"] == approval_id
+    assert approved["trace_id"] == pending["trace_id"]
+    assert approved["status"] == "approved"
+    assert approved["execution"]["status"] == "executed"
+    assert approved["execution"]["output"]["source"] == "mock_finance"
     assert client.get("/v1/approvals").json() == []
+
+    audit_items = client.get("/v1/audit-logs").json()["items"]
+    assert audit_items[0]["trace_id"] == pending["trace_id"]
+    assert audit_items[0]["execution"]["status"] == "executed"
 
     reject_response = client.post(
         f"/v1/approvals/{approval_id}/reject",
         headers=ADMIN_HEADERS,
     )
     assert reject_response.status_code == 404
+
+
+def test_rejecting_approval_records_non_execution(client: TestClient) -> None:
+    pending = client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="finance",
+            action="export",
+            parameters={"report_type": "financial", "cross_border": True},
+        ),
+    ).json()
+    approval_id = client.get("/v1/approvals").json()[0]["approval_id"]
+
+    response = client.post(
+        f"/v1/approvals/{approval_id}/reject",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 200
+    rejected = response.json()
+    assert rejected["trace_id"] == pending["trace_id"]
+    assert rejected["status"] == "rejected"
+    assert rejected["execution"]["status"] == "rejected"
+    assert rejected["execution"]["output"] is None
+    audit_items = client.get("/v1/audit-logs").json()["items"]
+    assert audit_items[0]["execution"]["status"] == "rejected"
+
+
+def test_mock_execution_failure_is_audited(client: TestClient) -> None:
+    class FailingExecutor:
+        def execute(self, request: object) -> None:
+            raise RuntimeError("mock adapter unavailable")
+
+    app.dependency_overrides[get_tool_executor] = lambda: FailingExecutor()
+
+    response = client.post(
+        "/v1/tool-call",
+        json=payload(tool_name="crm", action="read"),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "allow"
+    assert body["execution"]["status"] == "failed"
+    assert "mock adapter unavailable" in body["execution"]["message"]
+    audit_items = client.get("/v1/audit-logs").json()["items"]
+    assert audit_items[0]["execution"]["status"] == "failed"
 
 
 def test_api_detects_suspicious_sequence(client: TestClient) -> None:

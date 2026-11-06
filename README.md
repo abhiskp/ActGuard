@@ -12,6 +12,7 @@ This MVP does not connect to Gmail, Slack, Drive, CRM, databases, or any real th
 - `app/sequence_detector.py` keeps recent tool-call history per session.
 - `app/audit_log.py` writes every decision to SQLite.
 - `app/approvals.py` stores and updates human approval queue items.
+- `app/execution.py` runs deterministic mock tools and records execution outcomes.
 - `config/policies.yaml` contains the default policy-as-code rules.
 - `scripts/demo_agent.py` runs a mock agent scenario.
 
@@ -75,9 +76,20 @@ Response:
   "reason": "Cross-border financial exports require human approval.",
   "matched_policy_id": "require_approval_financial_export",
   "risk_score": 75,
-  "trace_id": "..."
+  "trace_id": "...",
+  "execution": {
+    "status": "pending_approval",
+    "updated_at": "2026-07-07T12:00:00Z",
+    "message": "Tool call is held until a human approves it.",
+    "output": null
+  }
 }
 ```
+
+Allowed calls execute immediately through local mock adapters. Approval-required calls
+remain held until an administrator approves or rejects them. Blocked and rejected
+calls never execute. Execution status and mock output are included in the tool-call,
+approval, and audit-log responses.
 
 ## Approval API
 
@@ -106,6 +118,10 @@ Supported audit log query parameters:
 - `decision`: `allow`, `block`, or `require_approval`
 - `tool_name`
 - `action`
+
+Each audit item includes its latest execution state: `executed`,
+`pending_approval`, `blocked`, `rejected`, or `failed`. Audit records created by an
+older ActGuard version have a null execution value.
 
 ## Policy Format
 

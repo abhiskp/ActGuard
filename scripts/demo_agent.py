@@ -113,6 +113,7 @@ def run_demo() -> None:
         print(f"  reason: {response['reason']}")
         print(f"  matched_policy_id: {response['matched_policy_id']}")
         print(f"  risk_score: {response['risk_score']}")
+        print(f"  execution: {response['execution']['status']}")
         print(f"  trace_id: {response['trace_id']}")
         print()
 

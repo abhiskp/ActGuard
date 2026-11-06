@@ -12,6 +12,13 @@ from fastapi.staticfiles import StaticFiles
 from app.approvals import ApprovalRepository
 from app.audit_log import AuditLogRepository
 from app.database import get_database_path, initialize_database
+from app.execution import (
+    ExecutionRepository,
+    MockToolExecutor,
+    execute_tool,
+    initial_execution,
+    rejected_execution,
+)
 from app.models import (
     AuditLogPage,
     ApprovalDecisionResponse,
@@ -30,6 +37,7 @@ DASHBOARD_PATH = Path("static/index.html")
 
 sequence_detector = SequenceDetector()
 policy_engine = PolicyEngine.from_yaml(POLICY_PATH)
+tool_executor = MockToolExecutor()
 
 
 @asynccontextmanager
@@ -59,6 +67,10 @@ def get_sequence_detector() -> SequenceDetector:
     return sequence_detector
 
 
+def get_tool_executor() -> MockToolExecutor:
+    return tool_executor
+
+
 def reload_policy_engine_from_disk() -> PolicyEngine:
     return PolicyEngine.from_yaml(POLICY_PATH)
 
@@ -74,6 +86,7 @@ def evaluate_tool_call(
     db_path: Path = Depends(get_db_path),
     engine: PolicyEngine = Depends(get_policy_engine),
     detector: SequenceDetector = Depends(get_sequence_detector),
+    executor: MockToolExecutor = Depends(get_tool_executor),
 ) -> ToolCallDecision:
     previous_calls = detector.recent_calls(request.session_id)
     policy_match = engine.evaluate(request, previous_calls)
@@ -88,6 +101,10 @@ def evaluate_tool_call(
     AuditLogRepository(db_path).record_decision(request, response)
     if response.decision == Decision.REQUIRE_APPROVAL:
         ApprovalRepository(db_path).create_item(request, response)
+
+    execution = initial_execution(request, response.decision, executor)
+    ExecutionRepository(db_path).record(response.trace_id, execution)
+    response.execution = execution
 
     detector.add_call(
         ToolCallEvent(
@@ -161,8 +178,17 @@ def reload_policies() -> PolicyReloadResponse:
 def approve_item(
     approval_id: str,
     db_path: Path = Depends(get_db_path),
+    executor: MockToolExecutor = Depends(get_tool_executor),
 ) -> ApprovalDecisionResponse:
-    return ApprovalRepository(db_path).approve(approval_id)
+    approvals = ApprovalRepository(db_path)
+    item = approvals.get_pending(approval_id)
+    response = approvals.approve(approval_id)
+    execution = execute_tool(
+        ToolCallRequest.model_validate_json(item.raw_request_json), executor
+    )
+    ExecutionRepository(db_path).record(item.trace_id, execution)
+    response.execution = execution
+    return response
 
 
 @app.post(
@@ -174,7 +200,13 @@ def reject_item(
     approval_id: str,
     db_path: Path = Depends(get_db_path),
 ) -> ApprovalDecisionResponse:
-    return ApprovalRepository(db_path).reject(approval_id)
+    approvals = ApprovalRepository(db_path)
+    item = approvals.get_pending(approval_id)
+    response = approvals.reject(approval_id)
+    execution = rejected_execution()
+    ExecutionRepository(db_path).record(item.trace_id, execution)
+    response.execution = execution
+    return response
 
 
 @app.get("/health")
