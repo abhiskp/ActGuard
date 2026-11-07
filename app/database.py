@@ -17,6 +17,7 @@ def get_connection(database_path: Path | str | None = None) -> sqlite3.Connectio
     db_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
 
@@ -56,6 +57,18 @@ def initialize_database(database_path: Path | str | None = None) -> None:
                 risk_score INTEGER NOT NULL,
                 raw_request_json TEXT NOT NULL,
                 FOREIGN KEY(trace_id) REFERENCES audit_logs(trace_id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tool_executions (
+                trace_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                message TEXT NOT NULL,
+                output_json TEXT,
+                FOREIGN KEY(trace_id) REFERENCES audit_logs(trace_id) ON DELETE CASCADE
             )
             """
         )

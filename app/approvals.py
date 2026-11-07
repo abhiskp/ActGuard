@@ -89,6 +89,19 @@ class ApprovalRepository:
             ).fetchall()
         return [self._row_to_item(row) for row in rows]
 
+    def get_pending(self, approval_id: str) -> ApprovalItem:
+        with get_connection(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM approvals WHERE approval_id = ? AND status = ?",
+                (approval_id, ApprovalStatus.PENDING.value),
+            ).fetchone()
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pending approval item not found.",
+            )
+        return self._row_to_item(row)
+
     def approve(self, approval_id: str) -> ApprovalDecisionResponse:
         return self._set_status(approval_id, ApprovalStatus.APPROVED)
 
@@ -98,6 +111,7 @@ class ApprovalRepository:
     def _set_status(
         self, approval_id: str, approval_status: ApprovalStatus
     ) -> ApprovalDecisionResponse:
+        item = self.get_pending(approval_id)
         decided_at = datetime.now(timezone.utc).isoformat()
         with get_connection(self.database_path) as connection:
             cursor = connection.execute(
@@ -122,6 +136,7 @@ class ApprovalRepository:
             )
         return ApprovalDecisionResponse(
             approval_id=approval_id,
+            trace_id=item.trace_id,
             status=approval_status,
         )
 

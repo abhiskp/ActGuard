@@ -13,6 +13,21 @@ class Decision(str, Enum):
     REQUIRE_APPROVAL = "require_approval"
 
 
+class ExecutionStatus(str, Enum):
+    EXECUTED = "executed"
+    PENDING_APPROVAL = "pending_approval"
+    BLOCKED = "blocked"
+    REJECTED = "rejected"
+    FAILED = "failed"
+
+
+class ToolExecutionResult(BaseModel):
+    status: ExecutionStatus
+    updated_at: datetime
+    message: str
+    output: dict[str, Any] | None = None
+
+
 class ToolCallRequest(BaseModel):
     agent_id: str = Field(..., min_length=1)
     session_id: str = Field(..., min_length=1)
@@ -29,6 +44,7 @@ class ToolCallDecision(BaseModel):
     matched_policy_id: str | None
     risk_score: int = Field(..., ge=0, le=100)
     trace_id: str
+    execution: ToolExecutionResult | None = None
 
 
 class AuditLogEntry(BaseModel):
@@ -43,6 +59,7 @@ class AuditLogEntry(BaseModel):
     matched_policy_id: str | None
     risk_score: int
     raw_request_json: str
+    execution: ToolExecutionResult | None = None
 
 
 class AuditLogPage(BaseModel):
@@ -76,7 +93,9 @@ class ApprovalItem(BaseModel):
 
 class ApprovalDecisionResponse(BaseModel):
     approval_id: str
+    trace_id: str
     status: ApprovalStatus
+    execution: ToolExecutionResult | None = None
 
 
 class PolicyReloadResponse(BaseModel):

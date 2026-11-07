@@ -10,6 +10,7 @@ from app.models import (
     Decision,
     ToolCallDecision,
     ToolCallRequest,
+    ToolExecutionResult,
 )
 
 
@@ -103,7 +104,14 @@ class AuditLogRepository:
             ).fetchone()["total"]
             rows = connection.execute(
                 f"""
-                SELECT * FROM audit_logs
+                SELECT
+                    audit_logs.*,
+                    tool_executions.status AS execution_status,
+                    tool_executions.updated_at AS execution_updated_at,
+                    tool_executions.message AS execution_message,
+                    tool_executions.output_json AS execution_output_json
+                FROM audit_logs
+                LEFT JOIN tool_executions USING (trace_id)
                 {where_sql}
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
@@ -124,6 +132,20 @@ class AuditLogRepository:
                     matched_policy_id=row["matched_policy_id"],
                     risk_score=row["risk_score"],
                     raw_request_json=json.dumps(json.loads(row["raw_request_json"])),
+                    execution=(
+                        ToolExecutionResult(
+                            status=row["execution_status"],
+                            updated_at=row["execution_updated_at"],
+                            message=row["execution_message"],
+                            output=(
+                                json.loads(row["execution_output_json"])
+                                if row["execution_output_json"] is not None
+                                else None
+                            ),
+                        )
+                        if row["execution_status"] is not None
+                        else None
+                    ),
                 )
                 for row in rows
             ],

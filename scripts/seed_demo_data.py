@@ -198,6 +198,7 @@ def reset_local_demo_data() -> None:
     database_path = get_database_path()
     initialize_database(database_path)
     with get_connection(database_path) as connection:
+        connection.execute("DELETE FROM tool_executions")
         connection.execute("DELETE FROM approvals")
         connection.execute("DELETE FROM audit_logs")
         connection.commit()
@@ -285,6 +286,7 @@ def main() -> None:
         print(f"  decision: {response['decision']}")
         print(f"  matched_policy_id: {response['matched_policy_id']}")
         print(f"  risk_score: {response['risk_score']}")
+        print(f"  execution: {response['execution']['status']}")
         print(f"  trace_id: {response['trace_id']}")
         print()
 
