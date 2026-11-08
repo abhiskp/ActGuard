@@ -35,7 +35,6 @@ from app.sequence_detector import SequenceDetector, ToolCallEvent
 POLICY_PATH = Path("config/policies.yaml")
 DASHBOARD_PATH = Path("static/index.html")
 
-sequence_detector = SequenceDetector()
 policy_engine = PolicyEngine.from_yaml(POLICY_PATH)
 tool_executor = MockToolExecutor()
 
@@ -64,7 +63,7 @@ def get_policy_engine() -> PolicyEngine:
 
 
 def get_sequence_detector() -> SequenceDetector:
-    return sequence_detector
+    return SequenceDetector(database_path=get_database_path())
 
 
 def get_tool_executor() -> MockToolExecutor:

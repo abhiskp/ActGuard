@@ -193,7 +193,6 @@ def build_seed_payloads(batch_id: str | None = None) -> list[tuple[str, dict[str
 
 def reset_local_demo_data() -> None:
     from app.database import get_connection, get_database_path, initialize_database
-    from app.main import get_sequence_detector
 
     database_path = get_database_path()
     initialize_database(database_path)
@@ -201,8 +200,8 @@ def reset_local_demo_data() -> None:
         connection.execute("DELETE FROM tool_executions")
         connection.execute("DELETE FROM approvals")
         connection.execute("DELETE FROM audit_logs")
+        connection.execute("DELETE FROM sequence_events")
         connection.commit()
-    get_sequence_detector().clear()
 
 
 def post_to_running_server(
@@ -227,9 +226,7 @@ def run_with_in_process_app(payloads: list[dict[str, Any]]) -> list[dict[str, An
     )
     from fastapi.testclient import TestClient
 
-    from app.main import app, get_sequence_detector
-
-    get_sequence_detector().clear()
+    from app.main import app
     with TestClient(app) as client:
         return [
             client.post("/v1/tool-call", json=payload).json()
