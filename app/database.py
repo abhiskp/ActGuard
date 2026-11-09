@@ -72,4 +72,24 @@ def initialize_database(database_path: Path | str | None = None) -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sequence_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                action TEXT NOT NULL,
+                resource TEXT NOT NULL,
+                parameters_json TEXT NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_sequence_events_session_id
+            ON sequence_events (session_id, id)
+            """
+        )
         connection.commit()

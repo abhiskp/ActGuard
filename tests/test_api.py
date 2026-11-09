@@ -24,9 +24,10 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.setenv("ACTGUARD_DB_PATH", str(database_path))
     monkeypatch.setenv("ACTGUARD_ADMIN_TOKEN", ADMIN_TOKEN)
     initialize_database(database_path)
-    detector = SequenceDetector()
     main_module.policy_engine = PolicyEngine.from_yaml(Path("config/policies.yaml"))
-    app.dependency_overrides[get_sequence_detector] = lambda: detector
+    app.dependency_overrides[get_sequence_detector] = lambda: SequenceDetector(
+        database_path=database_path
+    )
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

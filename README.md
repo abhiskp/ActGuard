@@ -9,7 +9,7 @@ This MVP does not connect to Gmail, Slack, Drive, CRM, databases, or any real th
 - `app/main.py` exposes the FastAPI API.
 - `app/models.py` defines typed request and response schemas with Pydantic.
 - `app/policy_engine.py` loads YAML policies and evaluates scalar, parameter, and sequence conditions.
-- `app/sequence_detector.py` keeps recent tool-call history per session.
+- `app/sequence_detector.py` keeps bounded tool-call history per session in SQLite.
 - `app/audit_log.py` writes every decision to SQLite.
 - `app/approvals.py` stores and updates human approval queue items.
 - `app/execution.py` runs deterministic mock tools and records execution outcomes.
@@ -235,3 +235,6 @@ docker compose up --build
 ```
 
 SQLite data is stored in a Docker volume mounted at `/app/data`.
+
+Sequence history uses the same SQLite database, so multi-step policies continue to
+work after an API process restart. ActGuard retains the latest 50 events per session.

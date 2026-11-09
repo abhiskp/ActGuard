@@ -8,6 +8,7 @@ import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -53,9 +54,7 @@ def run_with_in_process_app(payloads: list[dict[str, Any]]) -> list[dict[str, An
     )
     from fastapi.testclient import TestClient
 
-    from app.main import app, get_sequence_detector
-
-    get_sequence_detector().clear()
+    from app.main import app
     with TestClient(app) as client:
         return [
             client.post("/v1/tool-call", json=payload).json()
@@ -64,7 +63,7 @@ def run_with_in_process_app(payloads: list[dict[str, Any]]) -> list[dict[str, An
 
 
 def run_demo() -> None:
-    session_id = "demo-session"
+    session_id = f"demo-session-{uuid4()}"
     steps = [
         (
             "Read CRM customer data",
