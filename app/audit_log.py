@@ -70,6 +70,24 @@ class AuditLogRepository:
             connection.commit()
         return entry
 
+    def get_entry(self, trace_id: str) -> AuditLogEntry | None:
+        with get_connection(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    audit_logs.*,
+                    tool_executions.status AS execution_status,
+                    tool_executions.updated_at AS execution_updated_at,
+                    tool_executions.message AS execution_message,
+                    tool_executions.output_json AS execution_output_json
+                FROM audit_logs
+                LEFT JOIN tool_executions USING (trace_id)
+                WHERE audit_logs.trace_id = ?
+                """,
+                (trace_id,),
+            ).fetchone()
+        return self._row_to_entry(row) if row is not None else None
+
     def list_entries(
         self,
         *,
@@ -119,37 +137,37 @@ class AuditLogRepository:
                 [*values, limit, offset],
             ).fetchall()
         return AuditLogPage(
-            items=[
-                AuditLogEntry(
-                    trace_id=row["trace_id"],
-                    timestamp=row["timestamp"],
-                    agent_id=row["agent_id"],
-                    session_id=row["session_id"],
-                    tool_name=row["tool_name"],
-                    action=row["action"],
-                    decision=row["decision"],
-                    reason=row["reason"],
-                    matched_policy_id=row["matched_policy_id"],
-                    risk_score=row["risk_score"],
-                    raw_request_json=json.dumps(json.loads(row["raw_request_json"])),
-                    execution=(
-                        ToolExecutionResult(
-                            status=row["execution_status"],
-                            updated_at=row["execution_updated_at"],
-                            message=row["execution_message"],
-                            output=(
-                                json.loads(row["execution_output_json"])
-                                if row["execution_output_json"] is not None
-                                else None
-                            ),
-                        )
-                        if row["execution_status"] is not None
-                        else None
-                    ),
-                )
-                for row in rows
-            ],
+            items=[self._row_to_entry(row) for row in rows],
             total=total,
             limit=limit,
             offset=offset,
+        )
+
+    def _row_to_entry(self, row: object) -> AuditLogEntry:
+        return AuditLogEntry(
+            trace_id=row["trace_id"],
+            timestamp=row["timestamp"],
+            agent_id=row["agent_id"],
+            session_id=row["session_id"],
+            tool_name=row["tool_name"],
+            action=row["action"],
+            decision=row["decision"],
+            reason=row["reason"],
+            matched_policy_id=row["matched_policy_id"],
+            risk_score=row["risk_score"],
+            raw_request_json=json.dumps(json.loads(row["raw_request_json"])),
+            execution=(
+                ToolExecutionResult(
+                    status=row["execution_status"],
+                    updated_at=row["execution_updated_at"],
+                    message=row["execution_message"],
+                    output=(
+                        json.loads(row["execution_output_json"])
+                        if row["execution_output_json"] is not None
+                        else None
+                    ),
+                )
+                if row["execution_status"] is not None
+                else None
+            ),
         )

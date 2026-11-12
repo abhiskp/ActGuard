@@ -434,6 +434,52 @@
         grid-column: 1 / -1;
       }
 
+      .trace-detail {
+        background: #f9fafc;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 12px;
+        margin-bottom: 12px;
+        padding: 14px;
+      }
+
+      .trace-detail-grid,
+      .trace-json-grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .trace-detail-grid strong,
+      .trace-json-grid span {
+        display: block;
+        font-size: 11px;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+      }
+
+      .trace-json-grid pre {
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font-size: 11px;
+        margin: 0;
+        max-height: 150px;
+        overflow: auto;
+        padding: 10px;
+        white-space: pre-wrap;
+      }
+
+      .trace-button {
+        border: 0;
+        color: var(--indigo);
+        cursor: pointer;
+        font: inherit;
+        padding: 0;
+        text-decoration: underline;
+      }
+
       .toolbar {
         align-items: center;
         display: flex;
@@ -485,7 +531,9 @@
         .summary,
         .field-grid,
         .template-row,
-        .filter-grid {
+        .filter-grid,
+        .trace-detail-grid,
+        .trace-json-grid {
           grid-template-columns: 1fr;
         }
 
@@ -588,6 +636,7 @@
         const [selectedTemplate, setSelectedTemplate] = useState("crm");
         const [form, setForm] = useState(() => toForm(templates.crm));
         const [result, setResult] = useState(null);
+        const [selectedTrace, setSelectedTrace] = useState(null);
         const [loading, setLoading] = useState(false);
         const [error, setError] = useState("");
         const [adminToken, setAdminToken] = useState(() => {
@@ -780,15 +829,30 @@
           }
         }
 
+        async function inspectTrace(traceId) {
+          setLoading(true);
+          setError("");
+          try {
+            setSelectedTrace(await request(`/v1/traces/${traceId}`));
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        }
+
         async function decideApproval(approvalId, decision) {
           setLoading(true);
           setError("");
           try {
-            await request(`/v1/approvals/${approvalId}/${decision}`, {
+            const outcome = await request(`/v1/approvals/${approvalId}/${decision}`, {
               method: "POST",
               headers: { "X-ActGuard-Admin-Token": adminToken }
             });
             await refresh();
+            if (selectedTrace && selectedTrace.trace_id === outcome.trace_id) {
+              await inspectTrace(outcome.trace_id);
+            }
           } catch (err) {
             setError(err.message);
           } finally {
@@ -906,7 +970,11 @@
                             Execution: <strong>{result.execution.status}</strong>
                           </p>
                         )}
-                        <p className="muted"><code>{result.trace_id}</code></p>
+                        <p className="muted">
+                          <button className="trace-button" onClick={() => inspectTrace(result.trace_id)} type="button">
+                            Inspect trace {result.trace_id.slice(0, 8)}
+                          </button>
+                        </p>
                       </>
                     ) : (
                       <div className="result-empty">No decision selected</div>
@@ -945,6 +1013,9 @@
                           </p>
                           <p className="muted"><code>{raw.resource || item.resource}</code></p>
                           <div className="approval-actions">
+                            <button className="btn-secondary" onClick={() => inspectTrace(item.trace_id)} disabled={loading}>
+                              <Icon name="eye" /> Inspect
+                            </button>
                             <button className="btn-approve" onClick={() => decideApproval(item.approval_id, "approve")} disabled={loading}>
                               <Icon name="check" /> Approve
                             </button>
@@ -1013,6 +1084,41 @@
                       <Icon name="eraser" /> Clear
                     </button>
                   </div>
+                  {selectedTrace && (
+                    <section className="trace-detail">
+                      <div className="decision-row">
+                        <div>
+                          <strong>Trace {selectedTrace.trace_id}</strong>
+                          <p className="muted">{selectedTrace.reason}</p>
+                        </div>
+                        <button className="btn-secondary" onClick={() => setSelectedTrace(null)} type="button">
+                          <Icon name="x" /> Close
+                        </button>
+                      </div>
+                      <div className="trace-detail-grid">
+                        <div><strong>Decision</strong><DecisionPill value={selectedTrace.decision} /></div>
+                        <div><strong>Execution</strong>{selectedTrace.execution ? selectedTrace.execution.status : "legacy"}</div>
+                        <div><strong>Approval</strong>{selectedTrace.approval ? selectedTrace.approval.status : "not required"}</div>
+                        <div><strong>Agent</strong>{selectedTrace.request.agent_id}</div>
+                        <div><strong>Session</strong>{selectedTrace.request.session_id}</div>
+                        <div><strong>Policy</strong>{selectedTrace.matched_policy_id || "default_allow"}</div>
+                      </div>
+                      <div className="trace-json-grid">
+                        <div>
+                          <span>Request</span>
+                          <pre>{JSON.stringify(selectedTrace.request, null, 2)}</pre>
+                        </div>
+                        <div>
+                          <span>Execution output</span>
+                          <pre>{JSON.stringify(selectedTrace.execution && selectedTrace.execution.output, null, 2)}</pre>
+                        </div>
+                        <div>
+                          <span>Approval</span>
+                          <pre>{JSON.stringify(selectedTrace.approval, null, 2)}</pre>
+                        </div>
+                      </div>
+                    </section>
+                  )}
                   <div className="table-wrap">
                     {auditLogs.length === 0 ? (
                       <div className="empty-state">No audit entries</div>
@@ -1044,7 +1150,11 @@
                               <td>{entry.action}</td>
                               <td>{entry.matched_policy_id || "default_allow"}</td>
                               <td>{entry.risk_score}</td>
-                              <td><code>{entry.trace_id.slice(0, 8)}</code></td>
+                              <td>
+                                <button className="trace-button" onClick={() => inspectTrace(entry.trace_id)} type="button">
+                                  {entry.trace_id.slice(0, 8)}
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
