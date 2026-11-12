@@ -25,6 +25,8 @@ from app.models import (
     ApprovalItem,
     Decision,
     PolicyReloadResponse,
+    TraceApproval,
+    TraceDetail,
     ToolCallDecision,
     ToolCallRequest,
 )
@@ -143,6 +145,41 @@ def list_audit_logs(
         decision=decision,
         tool_name=tool_name,
         action=action,
+    )
+
+
+@app.get("/v1/traces/{trace_id}", response_model=TraceDetail)
+def get_trace(
+    trace_id: str,
+    db_path: Path = Depends(get_db_path),
+) -> TraceDetail:
+    audit_entry = AuditLogRepository(db_path).get_entry(trace_id)
+    if audit_entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trace not found.",
+        )
+
+    approval_item = ApprovalRepository(db_path).get_for_trace(trace_id)
+    approval = (
+        TraceApproval(
+            approval_id=approval_item.approval_id,
+            status=approval_item.status,
+            created_at=approval_item.created_at,
+            decided_at=approval_item.decided_at,
+        )
+        if approval_item is not None
+        else None
+    )
+    return TraceDetail(
+        trace_id=audit_entry.trace_id,
+        request=ToolCallRequest.model_validate_json(audit_entry.raw_request_json),
+        decision=audit_entry.decision,
+        reason=audit_entry.reason,
+        matched_policy_id=audit_entry.matched_policy_id,
+        risk_score=audit_entry.risk_score,
+        execution=audit_entry.execution,
+        approval=approval,
     )
 
 

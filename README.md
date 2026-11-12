@@ -123,6 +123,18 @@ Each audit item includes its latest execution state: `executed`,
 `pending_approval`, `blocked`, `rejected`, or `failed`. Audit records created by an
 older ActGuard version have a null execution value.
 
+## Trace API
+
+Retrieve one complete trace by ID:
+
+```bash
+curl http://127.0.0.1:8000/v1/traces/{trace_id}
+```
+
+The response combines the original typed tool-call request, policy decision,
+execution outcome, and current approval status. This keeps trace inspection useful
+after an approval is resolved without exposing SQLite-specific record shapes.
+
 ## Policy Format
 
 Policies live in `config/policies.yaml`.

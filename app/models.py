@@ -98,6 +98,24 @@ class ApprovalDecisionResponse(BaseModel):
     execution: ToolExecutionResult | None = None
 
 
+class TraceApproval(BaseModel):
+    approval_id: str
+    status: ApprovalStatus
+    created_at: datetime
+    decided_at: datetime | None = None
+
+
+class TraceDetail(BaseModel):
+    trace_id: str
+    request: ToolCallRequest
+    decision: Decision
+    reason: str
+    matched_policy_id: str | None
+    risk_score: int = Field(..., ge=0, le=100)
+    execution: ToolExecutionResult | None = None
+    approval: TraceApproval | None = None
+
+
 class PolicyReloadResponse(BaseModel):
     status: str
     policy_count: int

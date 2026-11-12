@@ -102,6 +102,14 @@ class ApprovalRepository:
             )
         return self._row_to_item(row)
 
+    def get_for_trace(self, trace_id: str) -> ApprovalItem | None:
+        with get_connection(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM approvals WHERE trace_id = ?",
+                (trace_id,),
+            ).fetchone()
+        return self._row_to_item(row) if row is not None else None
+
     def approve(self, approval_id: str) -> ApprovalDecisionResponse:
         return self._set_status(approval_id, ApprovalStatus.APPROVED)
 

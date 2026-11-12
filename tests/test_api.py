@@ -223,6 +223,65 @@ def test_audit_logs_paginate_results(client: TestClient) -> None:
     assert [entry["trace_id"] for entry in second_page["items"]] == [first["trace_id"]]
 
 
+def test_trace_detail_returns_request_decision_and_execution(client: TestClient) -> None:
+    decision = client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="crm",
+            action="read",
+            parameters={"customer_id": "acme", "fields": ["name", "tier"]},
+        ),
+    ).json()
+
+    response = client.get(f"/v1/traces/{decision['trace_id']}")
+
+    assert response.status_code == 200
+    trace = response.json()
+    assert trace["trace_id"] == decision["trace_id"]
+    assert trace["request"]["tool_name"] == "crm"
+    assert trace["request"]["parameters"]["customer_id"] == "acme"
+    assert trace["decision"] == "allow"
+    assert trace["matched_policy_id"] == "allow_read_only_crm_lookup"
+    assert trace["execution"]["status"] == "executed"
+    assert trace["execution"]["output"]["source"] == "mock_crm"
+    assert trace["approval"] is None
+
+
+def test_trace_detail_tracks_approval_lifecycle(client: TestClient) -> None:
+    decision = client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="finance",
+            action="export",
+            parameters={"report_type": "financial", "cross_border": True},
+        ),
+    ).json()
+    trace_id = decision["trace_id"]
+
+    pending_trace = client.get(f"/v1/traces/{trace_id}").json()
+    assert pending_trace["execution"]["status"] == "pending_approval"
+    assert pending_trace["approval"]["status"] == "pending"
+    approval_id = pending_trace["approval"]["approval_id"]
+
+    client.post(
+        f"/v1/approvals/{approval_id}/approve",
+        headers=ADMIN_HEADERS,
+    )
+    approved_trace = client.get(f"/v1/traces/{trace_id}").json()
+
+    assert approved_trace["approval"]["status"] == "approved"
+    assert approved_trace["approval"]["decided_at"] is not None
+    assert approved_trace["execution"]["status"] == "executed"
+    assert approved_trace["execution"]["output"]["source"] == "mock_finance"
+
+
+def test_trace_detail_returns_not_found(client: TestClient) -> None:
+    response = client.get("/v1/traces/missing-trace")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Trace not found."}
+
+
 def test_approval_flow_approve_and_reject(client: TestClient) -> None:
     pending = client.post(
         "/v1/tool-call",
@@ -283,6 +342,9 @@ def test_rejecting_approval_records_non_execution(client: TestClient) -> None:
     assert rejected["execution"]["output"] is None
     audit_items = client.get("/v1/audit-logs").json()["items"]
     assert audit_items[0]["execution"]["status"] == "rejected"
+    trace = client.get(f"/v1/traces/{pending['trace_id']}").json()
+    assert trace["approval"]["status"] == "rejected"
+    assert trace["execution"]["status"] == "rejected"
 
 
 def test_mock_execution_failure_is_audited(client: TestClient) -> None:
