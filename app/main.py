@@ -24,7 +24,9 @@ from app.models import (
     ApprovalDecisionResponse,
     ApprovalItem,
     Decision,
+    PolicyEvaluationResponse,
     PolicyReloadResponse,
+    PolicyView,
     ToolCallDecision,
     ToolCallRequest,
 )
@@ -143,6 +145,43 @@ def list_audit_logs(
         decision=decision,
         tool_name=tool_name,
         action=action,
+    )
+
+
+@app.get("/v1/policies", response_model=list[PolicyView])
+def list_policies(
+    engine: PolicyEngine = Depends(get_policy_engine),
+) -> list[PolicyView]:
+    return [
+        PolicyView(
+            id=policy.policy_id,
+            description=policy.description,
+            effect=policy.effect,
+            risk_score=policy.risk_score,
+            reason=policy.reason,
+            conditions=policy.conditions,
+            priority=policy.priority,
+        )
+        for policy in engine.policies
+    ]
+
+
+@app.post("/v1/policies/evaluate", response_model=PolicyEvaluationResponse)
+def evaluate_policies(
+    request: ToolCallRequest,
+    engine: PolicyEngine = Depends(get_policy_engine),
+    detector: SequenceDetector = Depends(get_sequence_detector),
+) -> PolicyEvaluationResponse:
+    policy_match = engine.evaluate(
+        request,
+        detector.recent_calls(request.session_id),
+    )
+    return PolicyEvaluationResponse(
+        decision=policy_match.decision,
+        reason=policy_match.reason,
+        matched_policy_id=policy_match.matched_policy_id,
+        risk_score=policy_match.risk_score,
+        evaluated_policy_count=len(engine.policies),
     )
 
 

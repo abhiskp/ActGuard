@@ -585,6 +585,7 @@
           offset: 0
         });
         const [approvals, setApprovals] = useState([]);
+        const [policies, setPolicies] = useState([]);
         const [selectedTemplate, setSelectedTemplate] = useState("crm");
         const [form, setForm] = useState(() => toForm(templates.crm));
         const [result, setResult] = useState(null);
@@ -673,9 +674,10 @@
                 query.set(key, value);
               }
             });
-            const [logs, queue] = await Promise.all([
+            const [logs, queue, activePolicies] = await Promise.all([
               request(`/v1/audit-logs?${query.toString()}`),
-              request("/v1/approvals")
+              request("/v1/approvals"),
+              request("/v1/policies")
             ]);
             setAuditLogs(logs.items);
             setAuditPage({
@@ -684,6 +686,7 @@
               offset: logs.offset
             });
             setApprovals(queue);
+            setPolicies(activePolicies);
           } catch (err) {
             setError(err.message);
           }
@@ -726,26 +729,44 @@
           setResult(null);
         }
 
+        function buildToolCallPayload() {
+          return {
+            agent_id: form.agent_id,
+            session_id: form.session_id,
+            tool_name: form.tool_name,
+            action: form.action,
+            resource: form.resource,
+            parameters: JSON.parse(form.parametersText || "{}"),
+            timestamp: new Date().toISOString()
+          };
+        }
+
         async function submitToolCall(event) {
           event.preventDefault();
           setLoading(true);
           setError("");
           try {
-            const payload = {
-              agent_id: form.agent_id,
-              session_id: form.session_id,
-              tool_name: form.tool_name,
-              action: form.action,
-              resource: form.resource,
-              parameters: JSON.parse(form.parametersText || "{}"),
-              timestamp: new Date().toISOString()
-            };
             const nextResult = await request("/v1/tool-call", {
               method: "POST",
-              body: JSON.stringify(payload)
+              body: JSON.stringify(buildToolCallPayload())
             });
             setResult(nextResult);
             await refresh();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        async function simulateToolCall() {
+          setLoading(true);
+          setError("");
+          try {
+            setResult(await request("/v1/policies/evaluate", {
+              method: "POST",
+              body: JSON.stringify(buildToolCallPayload())
+            }));
           } catch (err) {
             setError(err.message);
           } finally {
@@ -888,9 +909,14 @@
                       Parameters JSON
                       <textarea value={form.parametersText} onChange={(event) => setForm({ ...form, parametersText: event.target.value })} />
                     </label>
-                    <button className="btn-primary" type="submit" disabled={loading}>
-                      <Icon name="shield" /> Evaluate
-                    </button>
+                    <div className="approval-actions">
+                      <button className="btn-primary" type="submit" disabled={loading}>
+                        <Icon name="shield" /> Evaluate and Execute
+                      </button>
+                      <button className="btn-secondary" type="button" onClick={simulateToolCall} disabled={loading}>
+                        <Icon name="flask-conical" /> Policy Dry Run
+                      </button>
+                    </div>
                   </form>
 
                   <div className="result-box">
@@ -901,12 +927,18 @@
                           <span className="muted">Risk {result.risk_score}</span>
                         </div>
                         <p className="muted">{result.reason}</p>
+                        <p className="muted">
+                          Policy: <strong>{result.matched_policy_id || "default_allow"}</strong>
+                        </p>
+                        {result.dry_run && (
+                          <p className="muted"><strong>Dry run:</strong> no runtime state was changed.</p>
+                        )}
                         {result.execution && (
                           <p className="muted">
                             Execution: <strong>{result.execution.status}</strong>
                           </p>
                         )}
-                        <p className="muted"><code>{result.trace_id}</code></p>
+                        {result.trace_id && <p className="muted"><code>{result.trace_id}</code></p>}
                       </>
                     ) : (
                       <div className="result-empty">No decision selected</div>
@@ -955,6 +987,48 @@
                         </article>
                       );
                     })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel audit-panel">
+                <div className="panel-header">
+                  <div className="panel-title">
+                    <Icon name="file-code-2" />
+                    <div>
+                      <h2>Active Policies</h2>
+                      <span>{policies.length} rules loaded in priority order</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="panel-body">
+                  <div className="table-wrap">
+                    {policies.length === 0 ? (
+                      <div className="empty-state">No active policies</div>
+                    ) : (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Priority</th>
+                            <th>Policy</th>
+                            <th>Effect</th>
+                            <th>Risk</th>
+                            <th>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {policies.map((policy) => (
+                            <tr key={policy.id}>
+                              <td>{policy.priority}</td>
+                              <td><code>{policy.id}</code></td>
+                              <td><DecisionPill value={policy.effect} /></td>
+                              <td>{policy.risk_score}</td>
+                              <td>{policy.description}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 </div>
               </div>

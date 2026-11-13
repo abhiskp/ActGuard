@@ -98,6 +98,25 @@ class ApprovalDecisionResponse(BaseModel):
     execution: ToolExecutionResult | None = None
 
 
+class PolicyView(BaseModel):
+    id: str
+    description: str
+    effect: Decision
+    risk_score: int = Field(..., ge=0, le=100)
+    reason: str
+    conditions: dict[str, Any]
+    priority: int
+
+
+class PolicyEvaluationResponse(BaseModel):
+    decision: Decision
+    reason: str
+    matched_policy_id: str | None
+    risk_score: int = Field(..., ge=0, le=100)
+    evaluated_policy_count: int = Field(..., ge=0)
+    dry_run: bool = True
+
+
 class PolicyReloadResponse(BaseModel):
     status: str
     policy_count: int
