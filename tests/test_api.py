@@ -223,6 +223,95 @@ def test_audit_logs_paginate_results(client: TestClient) -> None:
     assert [entry["trace_id"] for entry in second_page["items"]] == [first["trace_id"]]
 
 
+def test_policy_inventory_returns_active_rules_in_priority_order(
+    client: TestClient,
+) -> None:
+    response = client.get("/v1/policies")
+
+    assert response.status_code == 200
+    policies = response.json()
+    assert len(policies) == 9
+    assert policies[0]["id"] == "block_mass_delete"
+    assert policies[0]["priority"] == 100
+    assert policies[0]["effect"] == "block"
+    assert policies[0]["conditions"]["parameters"][0] == {
+        "path": "count",
+        "greater_than": 5,
+    }
+    assert [policy["priority"] for policy in policies] == sorted(
+        [policy["priority"] for policy in policies],
+        reverse=True,
+    )
+
+
+def test_policy_dry_run_has_no_runtime_side_effects(client: TestClient) -> None:
+    scenarios = [
+        payload(tool_name="crm", action="read", session_id="dry-run-session"),
+        payload(
+            tool_name="finance",
+            action="export",
+            parameters={"report_type": "financial", "cross_border": True},
+            session_id="dry-run-session",
+        ),
+        payload(
+            tool_name="file_store",
+            action="delete",
+            parameters={"count": 1},
+            session_id="dry-run-session",
+        ),
+    ]
+
+    responses = [
+        client.post("/v1/policies/evaluate", json=scenario).json()
+        for scenario in scenarios
+    ]
+
+    assert [response["decision"] for response in responses] == [
+        "allow",
+        "require_approval",
+        "allow",
+    ]
+    assert responses[2]["matched_policy_id"] == "allow_small_file_delete"
+    assert all(response["dry_run"] for response in responses)
+    assert all(response["evaluated_policy_count"] == 9 for response in responses)
+    assert client.get("/v1/audit-logs").json()["total"] == 0
+    assert client.get("/v1/approvals").json() == []
+
+
+def test_policy_dry_run_reads_existing_session_history(client: TestClient) -> None:
+    session_id = "existing-history-session"
+    client.post(
+        "/v1/tool-call",
+        json=payload(tool_name="crm", action="read", session_id=session_id),
+    )
+    client.post(
+        "/v1/tool-call",
+        json=payload(
+            tool_name="finance",
+            action="export",
+            parameters={"report_type": "financial", "cross_border": True},
+            session_id=session_id,
+        ),
+    )
+
+    response = client.post(
+        "/v1/policies/evaluate",
+        json=payload(
+            tool_name="file_store",
+            action="delete",
+            parameters={"count": 1},
+            session_id=session_id,
+        ),
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["decision"] == "block"
+    assert result["matched_policy_id"] == "suspicious_crm_finance_delete_sequence"
+    assert client.get("/v1/audit-logs").json()["total"] == 2
+    assert len(client.get("/v1/approvals").json()) == 1
+
+
 def test_approval_flow_approve_and_reject(client: TestClient) -> None:
     pending = client.post(
         "/v1/tool-call",

@@ -178,6 +178,19 @@ curl -X POST http://127.0.0.1:8000/v1/policies/reload \
   -H "X-ActGuard-Admin-Token: change-me-local-dev"
 ```
 
+Inspect the active policy set and evaluate a tool call without runtime side effects:
+
+```bash
+curl http://127.0.0.1:8000/v1/policies
+curl -X POST http://127.0.0.1:8000/v1/policies/evaluate \
+  -H "Content-Type: application/json" \
+  --data @tool-call.json
+```
+
+Dry-run evaluation reads existing session history so sequence policies can be tested,
+but it does not add history, write an audit record, create an approval, or execute a
+mock tool.
+
 ## Admin Protection
 
 ActGuard protects administrative actions with an API token:
